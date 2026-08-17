@@ -144,7 +144,7 @@
             <div class="value" id="cardDesembolso">R$ 0,00</div>
         </div>
         <div class="card">
-            <h4>Clientes Ativos</h4>
+            <h4>Clientes (Ativos / Incremento)</h4>
             <div class="value" id="cardClientes">0</div>
         </div>
         <div class="card">
@@ -194,7 +194,7 @@
     <div id="modalUpload" class="modal">
         <div class="modal-content">
             <h3>Importar Bases em Excel</h3>
-            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos das bases que deseja atualizar (pode selecionar um ou todos ao mesmo tempo):</p>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos das bases para atualizar:</p>
             
             <div class="upload-group">
                 <label>1. Base de Renovações (.xlsx)</label>
@@ -278,7 +278,6 @@
             document.getElementById('nomeUsuario').textContent = usuarioLogado.nome;
             document.getElementById('perfilUsuario').textContent = usuarioLogado.perfil_acesso;
 
-            // Ativa os recursos de ADMIN (apenas o botão do cabeçalho agora)
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUploadHeader').style.display = 'inline-block';
                 document.getElementById('thAcoes').style.display = 'table-cell';
@@ -296,6 +295,13 @@
             if (p === 'SUL') return 'POLO SUL';
             if (p === 'SUDESTE') return 'POLO SUDESTE';
             return p;
+        }
+
+        function limparNumero(val) {
+            if (val === null || val === undefined) return 0;
+            if (typeof val === 'number') return val;
+            let str = String(val).replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.').trim();
+            return parseFloat(str) || 0;
         }
 
         async function carregarUsuarios() {
@@ -321,19 +327,23 @@
 
         async function carregarIndicadores() {
             try {
+                // 1. Total Desembolsado
                 const { data: desembolso } = await supabaseClient.from('base_desembolso').select('vlr_desembolsado');
                 if (desembolso) {
-                    const totalVal = desembolso.reduce((acc, curr) => acc + (Number(curr.vlr_desembolsado) || 0), 0);
+                    const totalVal = desembolso.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
                     document.getElementById('cardDesembolso').textContent = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
 
-                const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_ativos');
+                // 2. Clientes Ativos & Incremento
+                const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_ativos, cli_incremento');
                 if (clientes) {
-                    const totalCli = clientes.reduce((acc, curr) => acc + (Number(curr.cli_ativos) || 0), 0);
-                    document.getElementById('cardClientes').textContent = totalCli.toLocaleString('pt-BR');
+                    const totalAtivos = clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_ativos) || 0), 0);
+                    const totalInc = clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_incremento) || 0), 0);
+                    document.getElementById('cardClientes').textContent = `${totalAtivos.toLocaleString('pt-BR')} (Inc: ${totalInc > 0 ? '+' : ''}${totalInc})`;
                 }
 
-                const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id').eq('renovado', 'S');
+                // 3. Operações Renovadas
+                const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id, renovado').or('renovado.eq.S,renovado.eq.s');
                 if (renovacoes) {
                     document.getElementById('cardRenovacoes').textContent = renovacoes.length.toLocaleString('pt-BR');
                 }
@@ -486,7 +496,10 @@
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
-                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: 1 });
+
+                        // Desembolso e Clientes iniciam os dados na linha 3 (range 2). Renovações na linha 2 (range 1).
+                        const startRange = (tipo === 'desembolso' || tipo === 'clientes') ? 2 : 1;
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: startRange });
 
                         let dadosFormatados = [];
 
@@ -505,37 +518,37 @@
                                 sicad: r['Sicad'],
                                 cliente: r['Cliente'],
                                 renovado: r['Renovado'],
-                                valor_potencial: r['Valor Potencial'],
-                                pct_renovacao: r['% de renovação'],
-                                vr_operacao_renovado: r["'Medidas'[Vr_Operação_Renovado]"]
+                                valor_potencial: limparNumero(r['Valor Potencial']),
+                                pct_renovacao: limparNumero(r['% de renovação']),
+                                vr_operacao_renovado: limparNumero(r["'Medidas'[Vr_Operação_Renovado]"])
                             }));
                         } else if (tipo === 'desembolso') {
                             dadosFormatados = json.map(r => ({
-                                matricula: String(r['Matrícula'] || '').trim(),
-                                agente: r['Agente'],
-                                operacao: r['Operação'],
-                                tipo: r['Tipo'],
-                                cod_unidade: r['Cód. Unid.'],
-                                produto: r['Produto'],
-                                vlr_desembolsado: r['Desembolsado'],
-                                qtd_cli_ope: r['Qtd_Cli_Ope'],
-                                ticket_medio: r['Tick. Médio'],
-                                prazo_medio: r['Praz. Médio']
+                                matricula: String(r['Matrícula'] || r['__EMPTY_1'] || '').trim(),
+                                agente: r['Agente'] || r['__EMPTY_2'],
+                                operacao: r['Operação'] || r['__EMPTY_3'],
+                                tipo: r['Tipo'] || r['__EMPTY_4'],
+                                cod_unidade: r['Cód. Unid.'] || r['__EMPTY_5'],
+                                produto: r['Produto'] || r['__EMPTY_6'],
+                                vlr_desembolsado: limparNumero(r['Desembolsado'] || r['__EMPTY_7']),
+                                qtd_cli_ope: r['Qtd_Cli_Ope'] || r['__EMPTY_8'],
+                                ticket_medio: limparNumero(r['Tick. Médio'] || r['__EMPTY_9']),
+                                prazo_medio: limparNumero(r['Praz. Médio'] || r['__EMPTY_10'])
                             }));
                         } else if (tipo === 'clientes') {
                             dadosFormatados = json.map(r => ({
-                                escritorio: r['ESCRITÓRIO'],
-                                polo: normalizarPolo(r['POLO']),
-                                unidade: r['UNIDADE'],
-                                nm_ass_crd: r['NM_ASS_CRD'],
-                                mt_ass_crd: String(r['MT_ASS_CRD'] || '').trim(),
-                                cli_ativos: r['Cli Ativos'],
-                                cli_novos: r['cli_novos_agt'],
-                                cli_retornados: r['cli_retornados_agt'],
-                                cli_evadidos: r['cli_evadidos_agt'],
-                                cli_prejuizados: r['cli_prejuizados_agt'],
-                                cli_sinistrados: r['cli_sinistrados_agt'],
-                                cli_incremento: r['cli_incremento_agt']
+                                escritorio: r['ESCRITÓRIO'] || r['__EMPTY'],
+                                polo: normalizarPolo(r['POLO'] || r['__EMPTY_1']),
+                                unidade: r['UNIDADE'] || r['__EMPTY_2'],
+                                nm_ass_crd: r['NM_ASS_CRD'] || r['__EMPTY_3'],
+                                mt_ass_crd: String(r['MT_ASS_CRD'] || r['__EMPTY_4'] || '').trim(),
+                                cli_ativos: parseInt(r['Cli Ativos'] || r['__EMPTY_5']) || 0,
+                                cli_novos: parseInt(r['cli_novos_agt'] || r['__EMPTY_6']) || 0,
+                                cli_retornados: parseInt(r['cli_retornados_agt'] || r['__EMPTY_7']) || 0,
+                                cli_evadidos: parseInt(r['cli_evadidos_agt'] || r['__EMPTY_8']) || 0,
+                                cli_prejuizados: parseInt(r['cli_prejuizados_agt'] || r['__EMPTY_9']) || 0,
+                                cli_sinistrados: parseInt(r['cli_sinistrados_agt'] || r['__EMPTY_10']) || 0,
+                                cli_incremento: parseInt(r['cli_incremento_agt'] || r['__EMPTY_11']) || 0
                             }));
                         }
 
