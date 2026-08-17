@@ -156,7 +156,6 @@
     <main>
         <div class="section-header">
             <h3>Acompanhamento do Escritório Regional</h3>
-            <button id="btnModalUploadMain" class="btn-action" style="display:none;" onclick="abrirModal()">📤 Importar Bases Excel</button>
         </div>
 
         <div class="filter-container">
@@ -279,9 +278,9 @@
             document.getElementById('nomeUsuario').textContent = usuarioLogado.nome;
             document.getElementById('perfilUsuario').textContent = usuarioLogado.perfil_acesso;
 
+            // Ativa os recursos de ADMIN (apenas o botão do cabeçalho agora)
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUploadHeader').style.display = 'inline-block';
-                document.getElementById('btnModalUploadMain').style.display = 'inline-block';
                 document.getElementById('thAcoes').style.display = 'table-cell';
             }
 
@@ -479,7 +478,6 @@
             }
         }
 
-        // PROCESSAMENTO DE ARQUIVO INDIVIDUAL (RETORNA PROMESSA)
         function lerEProcessarArquivo(file, tipo) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -551,7 +549,6 @@
             });
         }
 
-        // FUNÇÃO DE UPLOADS MULTIPLOS/UNIFICADOS
         async function importarBasesSelecionadas() {
             const fileRenovacoes = document.getElementById('fileRenovacoes').files[0];
             const fileDesembolso = document.getElementById('fileDesembolso').files[0];
@@ -571,21 +568,18 @@
             btnClose.disabled = true;
 
             try {
-                // 1. Processar Renovações (se selecionada)
                 if (fileRenovacoes) {
                     progressBox.textContent = '📖 Processando Base de Renovações...';
                     const dados = await lerEProcessarArquivo(fileRenovacoes, 'renovacoes');
                     await enviarParaSupabase('base_renovacoes', dados, progressBox, 'Renovações');
                 }
 
-                // 2. Processar Desembolso (se selecionada)
                 if (fileDesembolso) {
                     progressBox.textContent = '📖 Processando Base de Desembolso...';
                     const dados = await lerEProcessarArquivo(fileDesembolso, 'desembolso');
                     await enviarParaSupabase('base_desembolso', dados, progressBox, 'Desembolso');
                 }
 
-                // 3. Processar Clientes (se selecionada)
                 if (fileClientes) {
                     progressBox.textContent = '📖 Processando Base de Clientes...';
                     const dados = await lerEProcessarArquivo(fileClientes, 'clientes');
