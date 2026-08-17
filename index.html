@@ -330,7 +330,7 @@
     <div id="abaRenovacoes" class="tab-content">
         <main>
             <h3>Carteira de Operações a Renovar / A Vencer</h3>
-            <p style="font-size:12px; color:#666; margin-bottom:10px;">Acompanhe em tempo real o status de renovação, potencial financeiro e se a visita já foi agendada na agenda do agente.</p>
+            <p style="font-size:12px; color:#666; margin-bottom:10px;">Acompanhe em tempo real o status de renovação, potencial financeiro e se a visita presencial ou de grupo foi agendada na agenda do agente.</p>
             
             <div class="filter-container">
                 <select id="filtroRenovStatus" onchange="filtrarListaRenovacoes()">
@@ -345,7 +345,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Cliente / Sicad</th>
+                            <th>Cliente / Sicad / Grupo</th>
                             <th>Agente / Matrícula</th>
                             <th>Unidade / Polo</th>
                             <th>Valor Potencial</th>
@@ -387,10 +387,10 @@
                         <tr>
                             <th>Agente / Matrícula</th>
                             <th>Unidade / Polo</th>
-                            <th>Cliente / Operação</th>
+                            <th>Cliente / Grupo</th>
                             <th>Data Atendimento</th>
-                            <th>Status / Interação</th>
-                            <th>Retorno Agendado</th>
+                            <th>Tipo de Interação</th>
+                            <th>Retorno Agendado (Prazo Fechamento)</th>
                             <th>Valor Desejado</th>
                         </tr>
                     </thead>
@@ -454,24 +454,29 @@
         </main>
     </div>
 
-    <!-- Modal Novo Agendamento de Visita -->
+    <!-- Modal Novo Agendamento de Visita / Grupo -->
     <div id="modalNovoAgendamento" class="modal">
         <div class="modal-content">
-            <h3>Agendar Visita de Renovação</h3>
+            <h3>Agendar Visita de Renovação / Grupo</h3>
             <input type="hidden" id="agendMatricula">
             <input type="hidden" id="agendCliente">
 
-            <div class="upload-group"><label>Cliente</label><input type="text" id="agendNomeCliente" disabled style="background:#eee;"></div>
-            <div class="upload-group"><label>Data da Visita / Atendimento</label><input type="date" id="agendDataAtendimento"></div>
+            <div class="upload-group"><label>Cliente / Grupo Solidário</label><input type="text" id="agendNomeCliente" disabled style="background:#eee;"></div>
+            <div class="upload-group"><label>Data da Visita / Atendimento Presencial</label><input type="date" id="agendDataAtendimento"></div>
             <div class="upload-group">
-                <label>Status / Tipo de Interação</label>
+                <label>Tipo de Interação</label>
                 <select id="agendStatus">
-                    <option value="VISITA_PRESENCIAL">Visita Presencial</option>
-                    <option value="CONTATO_TELEFONICO">Contato Telefônico</option>
-                    <option value="WHATSAPP">Contato por WhatsApp</option>
+                    <option value="VISITA_GRUPO">👥 Visita de Grupo / Reunião</option>
+                    <option value="VISITA_PRESENCIAL">👤 Visita Individual Presencial</option>
+                    <option value="CONTATO_TELEFONICO">📞 Contato Telefônico</option>
+                    <option value="WHATSAPP">💬 Contato por WhatsApp</option>
                 </select>
             </div>
-            <div class="upload-group"><label>Data de Retorno Agendado</label><input type="date" id="agendDataRetorno"></div>
+            <div class="upload-group">
+                <label>Prazo Final de Retorno / Fechamento</label>
+                <input type="date" id="agendDataRetorno">
+                <span style="font-size:11px; color:#666;">* Data combinada com o grupo para encerramento da renovação.</span>
+            </div>
             <div class="upload-group"><label>Valor Previsto / Desejado (R$)</label><input type="number" id="agendValorDesejado" placeholder="Ex: 15000"></div>
 
             <button class="btn-action" style="width:100%; margin-top:10px;" onclick="salvarAgendamentoRenovacao()">Salvar Agendamento</button>
@@ -570,9 +575,15 @@
             inicializarGraficos();
         }
 
+        function normalizarString(str) {
+            if (!str) return '';
+            return str.toString().trim().toUpperCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+VTC\s+CRED/g, '').replace(/\s+VTC/g, '');
+        }
+
         function normalizarPolo(polo) {
-            if (!polo) return '';
-            let p = polo.toString().trim().toUpperCase();
+            let p = normalizarString(polo);
             if (p.includes('EXTREMO OESTE')) return 'POLO EXTREMO OESTE';
             if (p.includes('OESTE')) return 'POLO OESTE';
             if (p.includes('SUDOESTE')) return 'POLO SUDOESTE';
@@ -666,10 +677,10 @@
 
             const filtrados = baseRenovacoes.filter(r => {
                 const matchPolo = !polo || normalizarPolo(r.polo) === polo;
-                const matchUnidade = !unidade || String(r.unidade).toUpperCase().includes(unidade.toUpperCase());
-                const matchAgente = !agenteMatricula || r.matricula === agenteMatricula;
+                const matchUnidade = !unidade || normalizarString(r.unidade).includes(normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(r.matricula).trim() === String(agenteMatricula).trim();
 
-                const temAgendamento = baseAgenda.some(a => a.cliente === r.cliente || a.ope_renovacao === r.cliente);
+                const temAgendamento = baseAgenda.some(a => String(a.cliente).trim() === String(r.cliente).trim());
                 const ehRenovado = String(r.renovado).toUpperCase() === 'S';
 
                 let matchStatus = true;
@@ -688,7 +699,7 @@
 
             tbody.innerHTML = filtrados.map(r => {
                 const ehRenovado = String(r.renovado).toUpperCase() === 'S';
-                const temAgendamento = baseAgenda.some(a => a.cliente === r.cliente || a.ope_renovacao === r.cliente);
+                const temAgendamento = baseAgenda.some(a => String(a.cliente).trim() === String(r.cliente).trim());
 
                 let badgeRenov = ehRenovado ? '<span class="badge-status badge-renovado">🟢 Renovado</span>' : '<span class="badge-status badge-pendente">🔴 Pendente</span>';
                 let badgeAgend = temAgendamento ? '<span class="badge-status badge-agendado">📅 Agendado</span>' : '<span class="badge-status badge-pendente">🚨 Sem Agendamento</span>';
@@ -729,7 +740,7 @@
             const valor_desejado = parseFloat(document.getElementById('agendValorDesejado').value) || 0;
 
             if (!data_atendimento) {
-                alert('Informe a data do atendimento.');
+                alert('Informe a data da visita/atendimento.');
                 return;
             }
 
@@ -740,7 +751,7 @@
             if (error) {
                 alert('Erro ao agendar visita: ' + error.message);
             } else {
-                alert('Visita agendada com sucesso!');
+                alert('Visita / Reunião de grupo agendada com sucesso!');
                 fecharModalAgendamento();
                 carregarBasesERenderizar();
             }
@@ -784,10 +795,10 @@
             const dataFim = document.getElementById('agendaDataFim').value;
 
             const filtrados = baseAgenda.filter(item => {
-                const uObj = todosUsuarios.find(u => u.matricula === item.matricula_agente);
+                const uObj = todosUsuarios.find(u => String(u.matricula).trim() === String(item.matricula_agente).trim());
                 const matchPolo = !polo || (uObj && normalizarPolo(uObj.polo) === polo);
-                const matchUnidade = !unidade || (uObj && uObj.lotacao === unidade);
-                const matchAgente = !agenteMatricula || item.matricula_agente === agenteMatricula;
+                const matchUnidade = !unidade || (uObj && normalizarString(uObj.lotacao) === normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(item.matricula_agente).trim() === String(agenteMatricula).trim();
                 
                 let matchData = true;
                 if (dataInicio && item.data_atendimento) matchData = matchData && (item.data_atendimento >= dataInicio);
@@ -803,15 +814,20 @@
             }
 
             tbody.innerHTML = filtrados.map(i => {
-                const uObj = todosUsuarios.find(u => u.matricula === i.matricula_agente) || {};
+                const uObj = todosUsuarios.find(u => String(u.matricula).trim() === String(i.matricula_agente).trim()) || {};
+                
+                let rotuloTipo = i.status_interacao || '-';
+                if (rotuloTipo === 'VISITA_GRUPO') rotuloTipo = '👥 Visita de Grupo';
+                else if (rotuloTipo === 'VISITA_PRESENCIAL') rotuloTipo = '👤 Visita Presencial';
+
                 return `
                     <tr>
                         <td><strong>${uObj.nome || i.matricula_agente}</strong> (${i.matricula_agente})</td>
                         <td>${uObj.lotacao || '-'} / ${normalizarPolo(uObj.polo) || '-'}</td>
-                        <td>${i.cliente || '-'} (${i.ope_renovacao || 'S/N'})</td>
+                        <td>${i.cliente || '-'}</td>
                         <td>${i.data_atendimento || '-'}</td>
-                        <td>${i.status_interacao || '-'}</td>
-                        <td>${i.data_retorno_agendado || '-'}</td>
+                        <td>${rotuloTipo}</td>
+                        <td style="color:#A6193C; font-weight:bold;">${i.data_retorno_agendado || 'Sem prazo'}</td>
                         <td>R$ ${(i.valor_desejado || 0).toLocaleString('pt-BR')}</td>
                     </tr>
                 `;
@@ -840,26 +856,26 @@
             const unidade = document.getElementById('globalUnidade').value;
             const agenteMatricula = document.getElementById('globalAgente').value;
 
-            // 1. Desembolso
+            // 1. Desembolso Realizado
             const desembolsoFilt = baseDesembolso.filter(d => {
-                const uObj = todosUsuarios.find(u => u.matricula === d.matricula);
+                const uObj = todosUsuarios.find(u => String(u.matricula).trim() === String(d.matricula).trim());
                 const matchPolo = !polo || (uObj && normalizarPolo(uObj.polo) === polo);
-                const matchUnidade = !unidade || (uObj && uObj.lotacao === unidade);
-                const matchAgente = !agenteMatricula || d.matricula === agenteMatricula;
+                const matchUnidade = !unidade || (uObj && normalizarString(uObj.lotacao) === normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(d.matricula).trim() === String(agenteMatricula).trim();
                 return matchPolo && matchUnidade && matchAgente;
             });
 
             const totalDesembolsado = desembolsoFilt.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
 
-            // 2. Metas
+            // 2. Metas Oficiais
             const metasFilt = baseMetas.filter(m => {
                 const matchPolo = !polo || normalizarPolo(m.polo) === polo;
-                const matchUnidade = !unidade || String(m.unidade).toUpperCase() === unidade.toUpperCase();
+                const matchUnidade = !unidade || normalizarString(m.unidade).includes(normalizarString(unidade));
                 return matchPolo && matchUnidade;
             });
 
-            const metaDesembolsoTotal = metasFilt.reduce((acc, curr) => acc + (curr.meta_desembolso || 0), 0) || 1000000;
-            const metaIncrementoTotal = metasFilt.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0) || 50;
+            const metaDesembolsoTotal = metasFilt.reduce((acc, curr) => acc + (curr.meta_desembolso || 0), 0);
+            const metaIncrementoTotal = metasFilt.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0);
 
             const pctDesembolso = metaDesembolsoTotal > 0 ? (totalDesembolsado / metaDesembolsoTotal) * 100 : 0;
             const desafio65Val = metaDesembolsoTotal * 0.65;
@@ -873,11 +889,11 @@
             document.getElementById('kpiDesembolsoMeta').textContent = `Meta Mês: ${metaDesembolsoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
             document.getElementById('kpiDesembolsoDia').textContent = `Falta p/ Desafio 65%: R$ ${faltaDesafio65.toLocaleString('pt-BR')} (R$ ${realizarPorDia20.toLocaleString('pt-BR')}/dia)`;
 
-            // 3. Clientes e Incremento
+            // 3. Clientes e Incremento Realizado
             const clientesFilt = baseClientes.filter(c => {
                 const matchPolo = !polo || normalizarPolo(c.polo) === polo;
-                const matchUnidade = !unidade || String(c.unidade).toUpperCase() === unidade.toUpperCase();
-                const matchAgente = !agenteMatricula || c.mt_ass_crd === agenteMatricula;
+                const matchUnidade = !unidade || normalizarString(c.unidade).includes(normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(c.mt_ass_crd).trim() === String(agenteMatricula).trim();
                 return matchPolo && matchUnidade && matchAgente;
             });
 
@@ -891,11 +907,11 @@
             document.getElementById('kpiIncrementoMeta').textContent = `Meta Mês: ${metaIncrementoTotal}`;
             document.getElementById('kpiIncrementoDetalhe').textContent = `Ganhos (Novos/Ret): +${somaGanho} | Perdas (Ev/PJ): -${somaPerda}`;
 
-            // 4. Renovações
+            // 4. Renovações Realizadas
             const renovacoesFilt = baseRenovacoes.filter(r => {
                 const matchPolo = !polo || normalizarPolo(r.polo) === polo;
-                const matchUnidade = !unidade || String(r.unidade).toUpperCase().includes(unidade.toUpperCase());
-                const matchAgente = !agenteMatricula || r.matricula === agenteMatricula;
+                const matchUnidade = !unidade || normalizarString(r.unidade).includes(normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(r.matricula).trim() === String(agenteMatricula).trim();
                 return matchPolo && matchUnidade && matchAgente;
             });
 
@@ -909,11 +925,11 @@
             document.getElementById('kpiRenovacoesPendentes').textContent = `Pendentes: ${totalPotencialRenov - renovadasConcluidas.length} operados`;
             document.getElementById('kpiRenovacoesValor').textContent = valorTotalRenovado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + ' renovados';
 
-            // 5. Risco PJ
+            // 5. Risco PJ (361 dias)
             const atrasoFilt = baseAtraso.filter(a => {
                 const matchPolo = !polo || normalizarPolo(a.polo) === polo;
-                const matchUnidade = !unidade || String(a.unidade).toUpperCase().includes(unidade.toUpperCase());
-                const matchAgente = !agenteMatricula || a.matricula_agente === agenteMatricula;
+                const matchUnidade = !unidade || normalizarString(a.unidade).includes(normalizarString(unidade));
+                const matchAgente = !agenteMatricula || String(a.matricula_agente).trim() === String(agenteMatricula).trim();
                 return matchPolo && matchUnidade && matchAgente;
             });
 
@@ -943,19 +959,23 @@
             const diasUteis20 = calcularDiasUteisAte20();
 
             tbody.innerHTML = locais.map(loc => {
-                const mObj = baseMetas.filter(m => normalizarPolo(m.polo) === loc || String(m.unidade).toUpperCase() === loc.toUpperCase());
-                const metaVal = mObj.reduce((acc, curr) => acc + (curr.meta_desembolso || 0), 0) || 500000;
-                const metaInc = mObj.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0) || 15;
+                const locNorm = normalizarString(loc);
+                const mObj = baseMetas.filter(m => normalizarPolo(m.polo) === loc || normalizarString(m.unidade).includes(locNorm));
+                const metaVal = mObj.reduce((acc, curr) => acc + (curr.meta_desembolso || 0), 0);
+                const metaInc = mObj.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0);
 
                 const desObj = baseDesembolso.filter(d => {
-                    const uObj = todosUsuarios.find(u => u.matricula === d.matricula);
-                    return uObj && (normalizarPolo(uObj.polo) === loc || String(uObj.lotacao).toUpperCase() === loc.toUpperCase());
+                    const uObj = todosUsuarios.find(u => String(u.matricula).trim() === String(d.matricula).trim());
+                    return uObj && (normalizarPolo(uObj.polo) === loc || normalizarString(uObj.lotacao).includes(locNorm));
                 });
                 const realVal = desObj.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
-                const pctReal = (realVal / metaVal) * 100;
+                const pctReal = metaVal > 0 ? (realVal / metaVal) * 100 : 0;
 
                 const falta65 = Math.max((metaVal * 0.65) - realVal, 0);
                 const realizarDia = falta65 / diasUteis20;
+
+                const cliObj = baseClientes.filter(c => normalizarPolo(c.polo) === loc || normalizarString(c.unidade).includes(locNorm));
+                const incRealLoc = cliObj.reduce((acc, curr) => acc + (curr.cli_novos || 0) + (curr.cli_retornados || 0) - (curr.cli_evadidos || 0) - (curr.cli_prejuizados || 0), 0);
 
                 return `
                     <tr>
@@ -965,7 +985,7 @@
                         <td><span class="badge-pct">${pctReal.toFixed(1)}%</span></td>
                         <td style="color:#F68B1F; font-weight:bold;">R$ ${falta65.toLocaleString('pt-BR')}</td>
                         <td>R$ ${realizarDia.toLocaleString('pt-BR')}/dia</td>
-                        <td>+5 / ${metaInc}</td>
+                        <td>${incRealLoc > 0 ? '+' : ''}${incRealLoc} / ${metaInc}</td>
                     </tr>
                 `;
             }).join('');
@@ -977,7 +997,7 @@
                 type: 'bar',
                 data: {
                     labels: ['Ganhos (Novos/Retornados)', 'Perdas (Evadidos/PJ)'],
-                    datasets: [{ label: 'Qtd Clientes', data: [120, 45], backgroundColor: ['#28a745', '#d9534f'] }]
+                    datasets: [{ label: 'Qtd Clientes', data: [0, 0], backgroundColor: ['#28a745', '#d9534f'] }]
                 }
             });
 
@@ -986,7 +1006,7 @@
                 type: 'doughnut',
                 data: {
                     labels: ['Renovadas', 'Pendentes'],
-                    datasets: [{ data: [70, 30], backgroundColor: ['#28a745', '#F68B1F'] }]
+                    datasets: [{ data: [0, 0], backgroundColor: ['#28a745', '#F68B1F'] }]
                 }
             });
         }
@@ -1053,18 +1073,18 @@
             }
 
             box.style.display = 'block';
-            box.textContent = `🚀 Enviando resumos e alertas para ${selecionados.length} colaboradores...`;
+            box.textContent = `🚀 Disparando resumos de performance em lote para ${selecionados.length} colaboradores...`;
 
             setTimeout(() => {
-                box.textContent = `🎉 Disparo em lote concluído com sucesso para os ${selecionados.length} colaboradores!`;
-            }, 2000);
+                box.textContent = `🎉 Disparo concluído com sucesso para todos os ${selecionados.length} colaboradores selecionados!`;
+            }, 2500);
         }
 
         function abrirModal() { document.getElementById('modalUpload').style.display = 'flex'; }
         function fecharModal() { document.getElementById('modalUpload').style.display = 'none'; }
 
         function abrirModalEdicao(matricula) {
-            const usuario = todosUsuarios.find(u => u.matricula === matricula);
+            const usuario = todosUsuarios.find(u => String(u.matricula).trim() === String(matricula).trim());
             if (!usuario) return;
 
             document.getElementById('editMatricula').value = usuario.matricula;
@@ -1105,31 +1125,40 @@
             }
         }
 
+        // GERADOR DE MENSAGENS PADRONIZADAS COM DADOS REAIS RECALCULADOS
         async function gerarMensagemParaUsuario() {
             const matricula = document.getElementById('editMatricula').value;
-            const nome = document.getElementById('editNome').value;
+            const uObj = todosUsuarios.find(u => String(u.matricula).trim() === String(matricula).trim());
+            if (!uObj) return;
 
-            const atrasos = baseAtraso.filter(a => a.matricula_agente === matricula);
+            const desAgente = baseDesembolso.filter(d => String(d.matricula).trim() === String(matricula).trim());
+            const totalDes = desAgente.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
 
-            let msg = `📊 Resumo de Performance & Metas do Dia - ${nome}\n\n`;
-            msg += `🎯 Métricas de Incremento:\n`;
-            msg += `- Incremento Atual: +5 clientes\n`;
-            msg += `- Meta do Mês: +12 clientes\n\n`;
+            const cliAgente = baseClientes.filter(c => String(c.mt_ass_crd).trim() === String(matricula).trim());
+            const novos = cliAgente.reduce((acc, curr) => acc + (curr.cli_novos || 0) + (curr.cli_retornados || 0), 0);
+            const perdas = cliAgente.reduce((acc, curr) => acc + (curr.cli_evadidos || 0) + (curr.cli_prejuizados || 0), 0);
+            const incReal = novos - perdas;
 
-            msg += `⚠️ Previsão de Risco & Prejuízo:\n`;
-            if (atrasos.length > 0) {
-                const hojePJ = atrasos.filter(a => a.dias_atraso >= 361);
-                if (hojePJ.length > 0) {
-                    msg += `🚨 ALERTA CRÍTICO: Cliente caindo em PJ HOJE!\n`;
-                    hojePJ.forEach(c => {
-                        msg += `- Cliente ${c.cliente} completa 361 dias de atraso HOJE! Tel: ${c.telefone || 'S/N'} | Valor: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
-                    });
-                }
+            const pjHoje = baseAtraso.filter(a => String(a.matricula_agente).trim() === String(matricula).trim() && a.dias_atraso >= 361);
+
+            let msg = `📢 *RESUMO DE PERFORMANCE DIÁRIA*\n`;
+            msg += `👤 *Colaborador:* ${uObj.nome}\n`;
+            msg += `📍 *Unidade:* ${uObj.lotacao || '-'} | *Polo:* ${normalizarPolo(uObj.polo)}\n\n`;
+
+            msg += `💰 *Desembolso Acumulado:* R$ ${totalDes.toLocaleString('pt-BR')}\n`;
+            msg += `📈 *Incremento Líquido:* ${incReal > 0 ? '+' : ''}${incReal} clientes (Ganhos: +${novos} | Perdas: -${perdas})\n\n`;
+
+            if (pjHoje.length > 0) {
+                msg += `🚨 *ALERTA CRÍTICO: PREJUÍZO HOJE (361 DIAS)*\n`;
+                pjHoje.forEach(c => {
+                    msg += `• Cliente: ${c.cliente} | Saldo: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
+                });
+                msg += `\n`;
             } else {
-                msg += `Nenhum cliente em risco imediato de PJ.\n\n`;
+                msg += `✅ *Risco PJ:* Nenhum cliente caindo em prejuízo hoje.\n\n`;
             }
 
-            msg += `🔗 Acesse seu painel: https://renovar-lemon.vercel.app/login.html`;
+            msg += `🔗 *Acesse seu painel:* https://renovar-lemon.vercel.app/login.html`;
             document.getElementById('txtResumoGerado').value = msg;
         }
 
@@ -1167,7 +1196,7 @@
                             const poloNome = normalizarPolo(d['POLOS']);
                             const metaDesembolsoMes = limparNumero(d[colMes]);
 
-                            const clienteMeta = jsonClientes.find(c => String(c['UNIDADE']||'').trim().toUpperCase() === unidadeNome.toUpperCase()) || {};
+                            const clienteMeta = jsonClientes.find(c => normalizarString(c['UNIDADE']).includes(normalizarString(unidadeNome))) || {};
                             const metaIncrementoMes = parseInt(clienteMeta['META MÊS']) || 0;
                             const metaAtivosEstoque = parseInt(clienteMeta['META 2026']) || 0;
 
@@ -1193,7 +1222,6 @@
             });
         }
 
-        // LEITOR DE BASES DIVERSAS COM SUPORTE A CABEÇALHOS NA LINHA 2 (POWER BI)
         function lerEProcessarArquivo(file, tipo) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1206,7 +1234,6 @@
                         const jsonRaw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                         let headerRowIndex = 0;
 
-                        // Localiza dinamicamente a linha do cabeçalho
                         for (let i = 0; i < jsonRaw.length; i++) {
                             const linha = jsonRaw[i].map(c => String(c).trim());
                             if (linha.includes('Operação') || linha.includes('Soma de Dias de Atraso Ope.') || linha.includes('Matrícula') || linha.includes('Contatos') || linha.includes('Data de Desembolso')) {
