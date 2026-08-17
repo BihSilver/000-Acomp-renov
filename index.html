@@ -183,6 +183,16 @@
             font-size: 12px;
             margin-top: 10px;
         }
+
+        .badge-status {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .badge-renovado { background: #e6f4ea; color: #137333; }
+        .badge-agendado { background: #e8f0fe; color: #1a73e8; }
+        .badge-pendente { background: #fce8e6; color: #c5221f; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -273,12 +283,13 @@
     <!-- Abas Principais -->
     <div class="nav-tabs">
         <button class="tab-btn active" onclick="trocarAba(event, 'abaDash')">📊 Desempenho Regional & Desafio</button>
+        <button class="tab-btn" onclick="trocarAba(event, 'abaRenovacoes')">🔄 Operações a Renovar</button>
         <button class="tab-btn" onclick="trocarAba(event, 'abaAgenda')">📅 Agenda do Agente</button>
         <button class="tab-btn" onclick="trocarAba(event, 'abaEquipe')">👥 Gestão de Equipe</button>
         <button class="tab-btn" id="btnTabEnvio" style="display:none;" onclick="trocarAba(event, 'abaEnvioLote')">📲 Disparo em Lote</button>
     </div>
 
-    <!-- ABA 1: DASHBOARDS REFORMULADOS -->
+    <!-- ABA 1: DASHBOARDS -->
     <div id="abaDash" class="tab-content active">
         <div class="dashboard-grid">
             <div class="chart-box" style="grid-column: span 2;">
@@ -315,7 +326,43 @@
         </div>
     </div>
 
-    <!-- ABA 2: AGENDA COM FILTROS ESPECÍFICOS -->
+    <!-- ABA 2: NOVA TELA DE ACOMPANHAMENTO DETALHADO DE RENOVAÇÕES A VENCER -->
+    <div id="abaRenovacoes" class="tab-content">
+        <main>
+            <h3>Carteira de Operações a Renovar / A Vencer</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:10px;">Acompanhe em tempo real o status de renovação, potencial financeiro e se a visita já foi agendada na agenda do agente.</p>
+            
+            <div class="filter-container">
+                <select id="filtroRenovStatus" onchange="filtrarListaRenovacoes()">
+                    <option value="">Todos os Status</option>
+                    <option value="S">🟢 Renovados</option>
+                    <option value="AGENDADO">📅 Agendados (A Renovar)</option>
+                    <option value="NAO_AGENDADO">🚨 Sem Agendamento (Pendentes)</option>
+                </select>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente / Sicad</th>
+                            <th>Agente / Matrícula</th>
+                            <th>Unidade / Polo</th>
+                            <th>Valor Potencial</th>
+                            <th>Status Renovação</th>
+                            <th>Status Agendamento</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabelaRenovacoes">
+                        <tr><td colspan="7">Carregando operações a renovar...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ABA 3: AGENDA -->
     <div id="abaAgenda" class="tab-content">
         <main>
             <h3>Agenda e Acompanhamento de Visitas do Time</h3>
@@ -355,7 +402,7 @@
         </main>
     </div>
 
-    <!-- ABA 3: GESTÃO DE EQUIPE -->
+    <!-- ABA 4: GESTÃO DE EQUIPE -->
     <div id="abaEquipe" class="tab-content">
         <main>
             <div class="filter-container">
@@ -382,7 +429,7 @@
         </main>
     </div>
 
-    <!-- ABA 4: DISPARO EM LOTE -->
+    <!-- ABA 5: DISPARO EM LOTE -->
     <div id="abaEnvioLote" class="tab-content">
         <main>
             <h3 style="color:#A6193C;">Disparo em Lote de Notificações</h3>
@@ -405,6 +452,31 @@
             <button class="btn-action" style="background:#25D366; padding:12px 20px; font-size:14px; margin-top:15px; width:100%;" onclick="dispararEnvioEmLote()">📲 Disparar Resumos para Selecionados</button>
             <div id="progressoDisparo" style="display:none; margin-top:10px; padding:12px; background:#e9ecef; border-radius:8px; font-weight:bold; color:#A6193C;"></div>
         </main>
+    </div>
+
+    <!-- Modal Novo Agendamento de Visita -->
+    <div id="modalNovoAgendamento" class="modal">
+        <div class="modal-content">
+            <h3>Agendar Visita de Renovação</h3>
+            <input type="hidden" id="agendMatricula">
+            <input type="hidden" id="agendCliente">
+
+            <div class="upload-group"><label>Cliente</label><input type="text" id="agendNomeCliente" disabled style="background:#eee;"></div>
+            <div class="upload-group"><label>Data da Visita / Atendimento</label><input type="date" id="agendDataAtendimento"></div>
+            <div class="upload-group">
+                <label>Status / Tipo de Interação</label>
+                <select id="agendStatus">
+                    <option value="VISITA_PRESENCIAL">Visita Presencial</option>
+                    <option value="CONTATO_TELEFONICO">Contato Telefônico</option>
+                    <option value="WHATSAPP">Contato por WhatsApp</option>
+                </select>
+            </div>
+            <div class="upload-group"><label>Data de Retorno Agendado</label><input type="date" id="agendDataRetorno"></div>
+            <div class="upload-group"><label>Valor Previsto / Desejado (R$)</label><input type="number" id="agendValorDesejado" placeholder="Ex: 15000"></div>
+
+            <button class="btn-action" style="width:100%; margin-top:10px;" onclick="salvarAgendamentoRenovacao()">Salvar Agendamento</button>
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalAgendamento()">Cancelar</button>
+        </div>
     </div>
 
     <!-- Modal para Importação Unificada de Bases -->
@@ -546,6 +618,7 @@
                 preencherFiltrosGlobais();
                 preencherFiltrosAgenda();
                 filtrarEDashboardsGerais();
+                filtrarListaRenovacoes();
                 filtrarAgenda();
                 filtrarEquipe();
                 preencherListaDisparo();
@@ -582,9 +655,98 @@
             agentes.forEach(a => selectAgente.innerHTML += `<option value="${a.matricula}">${a.nome}</option>`);
 
             filtrarEDashboardsGerais();
+            filtrarListaRenovacoes();
         }
 
-        // PREENCHIMENTO E FILTROS DA AGENDA DO AGENTE
+        // LÓGICA DA NOVA ABA DE RENOVAÇÕES A VENCER E STATUS DE AGENDAMENTO
+        function filtrarListaRenovacoes() {
+            const polo = document.getElementById('globalPolo').value;
+            const unidade = document.getElementById('globalUnidade').value;
+            const agenteMatricula = document.getElementById('globalAgente').value;
+            const statusFiltro = document.getElementById('filtroRenovStatus').value;
+
+            const filtrados = baseRenovacoes.filter(r => {
+                const matchPolo = !polo || normalizarPolo(r.polo) === polo;
+                const matchUnidade = !unidade || String(r.unidade).toUpperCase() === unidade.toUpperCase();
+                const matchAgente = !agenteMatricula || r.matricula === agenteMatricula;
+
+                const temAgendamento = baseAgenda.some(a => a.cliente === r.cliente || a.ope_renovacao === r.cliente);
+                const ehRenovado = String(r.renovado).toUpperCase() === 'S';
+
+                let matchStatus = true;
+                if (statusFiltro === 'S') matchStatus = ehRenovado;
+                else if (statusFiltro === 'AGENDADO') matchStatus = !ehRenovado && temAgendamento;
+                else if (statusFiltro === 'NAO_AGENDADO') matchStatus = !ehRenovado && !temAgendamento;
+
+                return matchPolo && matchUnidade && matchAgente && matchStatus;
+            });
+
+            const tbody = document.getElementById('corpoTabelaRenovacoes');
+            if (filtrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">Nenhuma operação a renovar encontrada para os filtros selecionados.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(r => {
+                const ehRenovado = String(r.renovado).toUpperCase() === 'S';
+                const temAgendamento = baseAgenda.some(a => a.cliente === r.cliente || a.ope_renovacao === r.cliente);
+
+                let badgeRenov = ehRenovado ? '<span class="badge-status badge-renovado">🟢 Renovado</span>' : '<span class="badge-status badge-pendente">🔴 Pendente</span>';
+                let badgeAgend = temAgendamento ? '<span class="badge-status badge-agendado">📅 Agendado</span>' : '<span class="badge-status badge-pendente">🚨 Sem Agendamento</span>';
+
+                let btnAcao = ehRenovado ? '-' : `<button class="btn-action" style="padding: 4px 10px; font-size: 11px;" onclick="abrirModalAgendamento('${r.matricula}', '${r.cliente}')">➕ Agendar Visita</button>`;
+
+                return `
+                    <tr>
+                        <td><strong>${r.cliente || '-'}</strong> (${r.sicad || 'S/N'})</td>
+                        <td>${r.agente || '-'} (${r.matricula || '-'})</td>
+                        <td>${r.unidade || '-'} / ${normalizarPolo(r.polo)}</td>
+                        <td>R$ ${(r.valor_potencial || 0).toLocaleString('pt-BR')}</td>
+                        <td>${badgeRenov}</td>
+                        <td>${badgeAgend}</td>
+                        <td>${btnAcao}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function abrirModalAgendamento(matricula, cliente) {
+            document.getElementById('agendMatricula').value = matricula;
+            document.getElementById('agendCliente').value = cliente;
+            document.getElementById('agendNomeCliente').value = cliente;
+            document.getElementById('modalNovoAgendamento').style.display = 'flex';
+        }
+
+        function fecharModalAgendamento() {
+            document.getElementById('modalNovoAgendamento').style.display = 'none';
+        }
+
+        async function salvarAgendamentoRenovacao() {
+            const matricula_agente = document.getElementById('agendMatricula').value;
+            const cliente = document.getElementById('agendCliente').value;
+            const data_atendimento = document.getElementById('agendDataAtendimento').value;
+            const status_interacao = document.getElementById('agendStatus').value;
+            const data_retorno_agendado = document.getElementById('agendDataRetorno').value;
+            const valor_desejado = parseFloat(document.getElementById('agendValorDesejado').value) || 0;
+
+            if (!data_atendimento) {
+                alert('Informe a data do atendimento.');
+                return;
+            }
+
+            const { error } = await supabaseClient.from('interacoes_agente').insert([{
+                matricula_agente, cliente, data_atendimento, status_interacao, data_retorno_agendado, valor_desejado, ope_renovacao: cliente
+            }]);
+
+            if (error) {
+                alert('Erro ao agendar visita: ' + error.message);
+            } else {
+                alert('Visita agendada com sucesso!');
+                fecharModalAgendamento();
+                carregarBasesERenderizar();
+            }
+        }
+
         function preencherFiltrosAgenda() {
             const polos = [...new Set(todosUsuarios.map(u => normalizarPolo(u.polo)).filter(Boolean))].sort();
             const selectPolo = document.getElementById('agendaPolo');
