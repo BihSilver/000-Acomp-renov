@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Renovações e Performance</title>
+    <title>Sistema de Renovações & Gestão de Performance</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 15px; }
@@ -35,23 +35,24 @@
         .btn-action:hover { background-color: #d87515; }
         .btn-action:disabled { background-color: #ccc; cursor: not-allowed; }
 
-        /* Abas de Navegação Superior */
         .nav-tabs {
             display: flex;
             gap: 10px;
             margin-top: 15px;
             border-bottom: 2px solid #ccc;
             padding-bottom: 5px;
+            flex-wrap: wrap;
         }
 
         .tab-btn {
             background: white;
             border: 1px solid #ccc;
-            padding: 10px 20px;
+            padding: 10px 18px;
             border-radius: 8px 8px 0 0;
             cursor: pointer;
             font-weight: bold;
             color: #555;
+            font-size: 13px;
         }
 
         .tab-btn.active {
@@ -63,7 +64,6 @@
         .tab-content { display: none; margin-top: 15px; }
         .tab-content.active { display: block; }
 
-        /* Cards KPIs */
         .cards-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -79,12 +79,11 @@
             border-left: 5px solid #A6193C;
         }
         .card h4 { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
-        .card .value { font-size: 20px; font-weight: bold; color: #A6193C; }
+        .card .value { font-size: 18px; font-weight: bold; color: #A6193C; }
 
-        /* Grade do Dashboard Visually Clean */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
             gap: 20px;
             margin-top: 20px;
         }
@@ -103,6 +102,7 @@
             flex-wrap: wrap;
             gap: 10px;
             margin: 15px 0;
+            align-items: center;
         }
 
         input, select {
@@ -112,7 +112,7 @@
             font-size: 14px;
             outline-color: #F68B1F;
             flex: 1;
-            min-width: 180px;
+            min-width: 160px;
         }
 
         .modal {
@@ -154,10 +154,21 @@
         }
 
         .table-responsive { width: 100%; overflow-x: auto; margin-top: 15px; }
-        table { width: 100%; border-collapse: collapse; min-width: 650px; }
-        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
         th { background-color: #f8f9fa; color: #A6193C; font-weight: bold; }
         tr:hover { background-color: #f1f1f1; }
+
+        textarea {
+            width: 100%;
+            height: 220px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -171,46 +182,56 @@
         <div class="user-info">
             <span><strong id="nomeUsuario">Carregando...</strong> (<span id="perfilUsuario">---</span>)</span>
             <button id="btnModalUploadHeader" class="btn-action" style="display:none;" onclick="abrirModal()">📤 Importar Bases Excel</button>
+            <button id="btnCadastrarMeta" class="btn-action" style="display:none; background:#28a745;" onclick="abrirModalMetas()">🎯 Definir Metas</button>
             <button class="btn-action" onclick="sair()">Sair</button>
         </div>
     </header>
 
-    <!-- Cards de Resumo Superior -->
+    <!-- Seletor do Mês de Referência Global -->
+    <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+        <label style="font-weight: bold; font-size: 14px;">Mês de Referência:</label>
+        <input type="month" id="globalMesReferencia" value="2026-08" style="max-width: 180px;" onchange="recarregarTudo()">
+    </div>
+
+    <!-- Cards de Resumo de Indicadores -->
     <div class="cards-container">
         <div class="card">
             <h4>Total Desembolsado</h4>
             <div class="value" id="cardDesembolso">R$ 0,00</div>
         </div>
         <div class="card">
-            <h4>Clientes Ativos / Incremento</h4>
-            <div class="value" id="cardClientes">0</div>
+            <h4>Meta / Realizado Incremento</h4>
+            <div class="value" id="cardIncremento">0 / 0</div>
         </div>
         <div class="card">
             <h4>Operações Renovadas</h4>
             <div class="value" id="cardRenovacoes">0</div>
         </div>
         <div class="card" style="border-left-color: #F68B1F;">
-            <h4>Clientes em Risco PJ (>330 dias)</h4>
+            <h4>Clientes Risco PJ (Mês Ref.)</h4>
             <div class="value" id="cardRiscoPJ" style="color: #F68B1F;">0</div>
         </div>
     </div>
 
-    <!-- Navegação por Abas -->
+    <!-- Abas Principais -->
     <div class="nav-tabs">
-        <button class="tab-btn active" onclick="trocarAba('abaDash')">📊 Dashboard & Gráficos</button>
-        <button class="tab-btn" onclick="trocarAba('abaAgenda')">📅 Agenda do Agente</button>
-        <button class="tab-btn" onclick="trocarAba('abaEquipe')">👥 Gestão de Equipe</button>
-        <button class="tab-btn" id="btnTabEnvio" style="display:none;" onclick="trocarAba('abaEnvioLote')">📲 Disparo em Lote</button>
+        <button class="tab-btn active" onclick="trocarAba(event, 'abaDash')">📊 Dashboard & Gráficos</button>
+        <button class="tab-btn" onclick="trocarAba(event, 'abaAgenda')">📅 Agenda do Agente</button>
+        <button class="tab-btn" onclick="trocarAba(event, 'abaEquipe')">👥 Gestão de Equipe</button>
+        <button class="tab-btn" id="btnTabEnvio" style="display:none;" onclick="trocarAba(event, 'abaEnvioLote')">📲 Disparo em Lote</button>
     </div>
 
-    <!-- ABA 1: DASHBOARD VISUAL COM GRÁFICOS -->
+    <!-- ABA 1: DASHBOARD COMPLETO COM FILTROS EM CASCATA -->
     <div id="abaDash" class="tab-content active">
         <div class="filter-container">
-            <select id="dashFiltroPolo" onchange="atualizarGraficos()">
+            <select id="dashPolo" onchange="aoMudarPoloDash()">
                 <option value="">Todos os Polos</option>
             </select>
-            <select id="dashFiltroLotacao" onchange="atualizarGraficos()">
+            <select id="dashUnidade" onchange="aoMudarUnidadeDash()">
                 <option value="">Todas as Unidades</option>
+            </select>
+            <select id="dashAgente" onchange="atualizarGraficos()">
+                <option value="">Todos os Agentes</option>
             </select>
         </div>
 
@@ -220,17 +241,24 @@
                 <canvas id="chartDesembolsoPolo"></canvas>
             </div>
             <div class="chart-box">
-                <h4>Status das Renovações do Mês</h4>
+                <h4>Status de Renovações do Mês</h4>
                 <canvas id="chartRenovacoesStatus"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- ABA 2: AGENDA E INTERAÇÕES DOS AGENTES -->
+    <!-- ABA 2: AGENDA COM FILTROS COMPLETOS (DATA, POLO, UNIDADE, AGENTE) -->
     <div id="abaAgenda" class="tab-content">
         <main>
-            <h3>Agenda e Acompanhamento de Visitas dos Agentes</h3>
-            <p style="font-size:13px; color:#666; margin-bottom:15px;">Consulte os agendamentos realizados pelos agentes para o dia e acompanhe quem possui pendências.</p>
+            <h3>Agenda e Acompanhamento de Visitas do Time</h3>
+            
+            <div class="filter-container">
+                <input type="date" id="agendaDataInicio" onchange="filtrarAgenda()">
+                <input type="date" id="agendaDataFim" onchange="filtrarAgenda()">
+                <select id="agendaPolo" onchange="aoMudarPoloAgenda()"><option value="">Todos os Polos</option></select>
+                <select id="agendaUnidade" onchange="aoMudarUnidadeAgenda()"><option value="">Todas as Unidades</option></select>
+                <select id="agendaAgente" onchange="filtrarAgenda()"><option value="">Todos os Agentes</option></select>
+            </div>
             
             <div class="table-responsive">
                 <table>
@@ -241,24 +269,25 @@
                             <th>Data Atendimento</th>
                             <th>Status / Interação</th>
                             <th>Retorno Agendado</th>
-                            <th>Ação</th>
+                            <th>Valor Desejado</th>
                         </tr>
                     </thead>
                     <tbody id="corpoAgenda">
-                        <tr><td colspan="6">Nenhum agendamento pendente registrado para hoje.</td></tr>
+                        <tr><td colspan="6">Nenhum registro encontrado para os filtros selecionados.</td></tr>
                     </tbody>
                 </table>
             </div>
         </main>
     </div>
 
-    <!-- ABA 3: GESTÃO DE EQUIPE -->
+    <!-- ABA 3: GESTÃO DE EQUIPE COM BOTÃO GERENCIAR FUNCIONAL -->
     <div id="abaEquipe" class="tab-content">
         <main>
             <div class="filter-container">
-                <input type="text" id="buscaNome" placeholder="Buscar Nome ou Matrícula..." oninput="filtrarTabela()">
-                <select id="filtroPolo" onchange="aoMudarPolo()"><option value="">Todos os Polos</option></select>
-                <select id="filtroLotacao" onchange="filtrarTabela()"><option value="">Todas as Unidades</option></select>
+                <input type="text" id="buscaNome" placeholder="Buscar Nome ou Matrícula..." oninput="filtrarEquipe()">
+                <select id="filtroPoloEquipe" onchange="aoMudarPoloEquipe()"><option value="">Todos os Polos</option></select>
+                <select id="filtroLotacaoEquipe" onchange="aoMudarUnidadeEquipe()"><option value="">Todas as Unidades</option></select>
+                <select id="filtroAgenteEquipe" onchange="filtrarEquipe()"><option value="">Todos os Agentes</option></select>
             </div>
 
             <div class="table-responsive">
@@ -271,7 +300,7 @@
                             <th>Lotação / Unidade</th>
                             <th>Polo</th>
                             <th>Perfil</th>
-                            <th id="thAcoes" style="display:none;">Ações</th>
+                            <th id="thAcoes">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="corpoTabela">
@@ -282,17 +311,37 @@
         </main>
     </div>
 
-    <!-- ABA 4: DISPARO EM LOTE (EXCLUSIVO ADMIN/GESTOR) -->
+    <!-- ABA 4: DISPARO EM LOTE COM SELEÇÃO E FILTROS -->
     <div id="abaEnvioLote" class="tab-content">
         <main>
-            <h3 style="color:#A6193C;">Disparo Automático de Mensagens e Alertas de PJ</h3>
-            <p style="font-size:13px; color:#666; margin-bottom:15px;">Selecione os colaboradores e envie o resumo individual de performance e alertas de PJ de uma só vez.</p>
+            <h3 style="color:#A6193C;">Disparo em Lote de Notificações</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:10px;">Filtre e marque os colaboradores para os quais deseja gerar/enviar o resumo individual de performance e os alertas de risco de PJ.</p>
             
-            <button class="btn-action" style="background:#25D366; padding:12px 20px; font-size:14px; margin-bottom:15px;" onclick="dispararEnvioEmLote()">📲 Disparar Resumos para Toda a Lista Selecionada</button>
-
-            <div id="progressoDisparo" style="display:none; padding:12px; background:#e9ecef; border-radius:8px; font-weight:bold; color:#A6193C;">
-                Processando disparos...
+            <div class="filter-container">
+                <select id="disparoPolo" onchange="filtrarListaDisparo()"><option value="">Todos os Polos</option></select>
+                <select id="disparoUnidade" onchange="filtrarListaDisparo()"><option value="">Todas as Unidades</option></select>
+                <button class="btn-action" style="background:#6c757d; max-width:180px;" onclick="marcarDesmarcarTodos()">Selecionar Todos</button>
             </div>
+
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="chkTodosDisparo" onchange="marcarTodosToggle(this)"></th>
+                            <th>Matrícula</th>
+                            <th>Nome</th>
+                            <th>Unidade</th>
+                            <th>Polo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoDisparo">
+                        <tr><td colspan="5">Carregando lista...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="btn-action" style="background:#25D366; padding:12px 20px; font-size:14px; margin-top:15px; width:100%;" onclick="dispararEnvioEmLote()">📲 Disparar Resumos para Selecionados</button>
+            <div id="progressoDisparo" style="display:none; margin-top:10px; padding:12px; background:#e9ecef; border-radius:8px; font-weight:bold; color:#A6193C;"></div>
         </main>
     </div>
 
@@ -309,7 +358,84 @@
 
             <button id="btnSubmitUpload" class="btn-action" style="width:100%; margin-top:10px; padding: 12px;" onclick="importarBasesSelecionadas()">🚀 Importar Bases Selecionadas</button>
             <div id="statusProgress">Aguardando arquivos...</div>
-            <button id="btnCloseModal" class="btn-action close-btn" style="width:100%;" onclick="fecharModal()">Fechar</button>
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModal()">Fechar</button>
+        </div>
+    </div>
+
+    <!-- Modal para Gerenciar Metas (ADMIN/Gestor) -->
+    <div id="modalMetas" class="modal">
+        <div class="modal-content">
+            <h3>Cadastrar / Alterar Metas</h3>
+            
+            <div class="upload-group">
+                <label>Nível da Meta</label>
+                <select id="metaNivel">
+                    <option value="ESCRITORIO">Escritório Regional</option>
+                    <option value="POLO">Polo</option>
+                    <option value="UNIDADE">Unidade</option>
+                    <option value="AGENTE">Agente</option>
+                </select>
+            </div>
+
+            <div class="upload-group">
+                <label>Nome / Referência (Ex: POLO SUDOESTE, VITORIA DA CONQUISTA VTC ou Matrícula)</label>
+                <input type="text" id="metaReferencia" placeholder="Digite o nome do polo, unidade ou matrícula...">
+            </div>
+
+            <div class="upload-group">
+                <label>Meta de Desembolso (R$)</label>
+                <input type="number" id="metaValorDesembolso" placeholder="Ex: 500000">
+            </div>
+
+            <div class="upload-group">
+                <label>Meta de Incremento (Qtd Clientes)</label>
+                <input type="number" id="metaQtdIncremento" placeholder="Ex: 20">
+            </div>
+
+            <button class="btn-action" style="width:100%;" onclick="salvarMeta()">Salvar Meta</button>
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalMetas()">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Modal para Gerenciar Usuário Individual -->
+    <div id="modalEditarUsuario" class="modal">
+        <div class="modal-content">
+            <h3>Gerenciar Colaborador / Notificação</h3>
+            <input type="hidden" id="editMatricula">
+            
+            <div class="upload-group"><label>Nome</label><input type="text" id="editNome" disabled style="background:#eee;"></div>
+            <div class="upload-group"><label>Cargo</label><input type="text" id="editCargo"></div>
+            <div class="upload-group"><label>Lotação / Unidade</label><input type="text" id="editLotacao"></div>
+            <div class="upload-group">
+                <label>Polo</label>
+                <select id="editPolo">
+                    <option value="POLO EXTREMO OESTE">POLO EXTREMO OESTE</option>
+                    <option value="POLO OESTE">POLO OESTE</option>
+                    <option value="POLO SUDOESTE">POLO SUDOESTE</option>
+                    <option value="POLO SUL">POLO SUL</option>
+                    <option value="POLO SUDESTE">POLO SUDESTE</option>
+                </select>
+            </div>
+            <div class="upload-group">
+                <label>Perfil de Acesso</label>
+                <select id="editPerfil">
+                    <option value="AGENTE">AGENTE</option>
+                    <option value="GG">GG</option>
+                    <option value="ADMIN">ADMIN</option>
+                </select>
+            </div>
+
+            <button class="btn-action" style="width:100%; margin-top:5px;" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
+
+            <hr style="margin: 15px 0;">
+
+            <div class="upload-group">
+                <label style="color:#A6193C;">📩 Mensagem de Performance Personalizada</label>
+                <button class="btn-action" style="width:100%; background:#25D366;" onclick="gerarMensagemParaUsuario()">📲 Gerar Texto do Colaborador</button>
+                <textarea id="txtResumoGerado" placeholder="Clique no botão acima para gerar..."></textarea>
+            </div>
+
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalEdicao()">Fechar</button>
         </div>
     </div>
 
@@ -330,8 +456,8 @@
 
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUploadHeader').style.display = 'inline-block';
+                document.getElementById('btnCadastrarMeta').style.display = 'inline-block';
                 document.getElementById('btnTabEnvio').style.display = 'inline-block';
-                document.getElementById('thAcoes').style.display = 'table-cell';
             }
 
             carregarUsuarios();
@@ -339,21 +465,14 @@
             inicializarGraficos();
         }
 
-        function trocarAba(abaId) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            document.getElementById(abaId).classList.add('active');
-        }
-
         function normalizarPolo(polo) {
             if (!polo) return '';
             let p = polo.toString().trim().toUpperCase();
-            if (p === 'OESTE' || p === 'EXTREMO OESTE' || p === 'POLO OESTE') return 'POLO EXTREMO OESTE';
-            if (p === 'SUDOESTE') return 'POLO SUDOESTE';
-            if (p === 'SUL') return 'POLO SUL';
-            if (p === 'SUDESTE') return 'POLO SUDESTE';
+            if (p === 'EXTREMO OESTE' || p === 'POLO EXTREMO OESTE') return 'POLO EXTREMO OESTE';
+            if (p === 'OESTE' || p === 'POLO OESTE') return 'POLO OESTE';
+            if (p === 'SUDOESTE' || p === 'POLO SUDOESTE') return 'POLO SUDOESTE';
+            if (p === 'SUL' || p === 'POLO SUL') return 'POLO SUL';
+            if (p === 'SUDESTE' || p === 'POLO SUDESTE') return 'POLO SUDESTE';
             return p;
         }
 
@@ -362,6 +481,18 @@
             if (typeof val === 'number') return val;
             let str = String(val).replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.').trim();
             return parseFloat(str) || 0;
+        }
+
+        function trocarAba(evt, abaId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            evt.currentTarget.classList.add('active');
+            document.getElementById(abaId).classList.add('active');
+        }
+
+        async function recarregarTudo() {
+            await carregarIndicadores();
+            await atualizarGraficos();
         }
 
         async function carregarUsuarios() {
@@ -375,103 +506,150 @@
                 if (error) throw error;
 
                 todosUsuarios = data;
-                configurarFiltrosIniciais(data);
-                filtrarTabela();
+                preencherFiltrosCascata();
+                filtrarEquipe();
+                preencherListaDisparo();
             } catch (erro) {
-                console.error('Erro:', erro);
+                console.error('Erro ao carregar colaboradores:', erro);
             }
         }
 
         async function carregarIndicadores() {
             try {
+                const mesRef = document.getElementById('globalMesReferencia').value;
+
+                // Total Desembolsado
                 const { data: desembolso } = await supabaseClient.from('base_desembolso').select('vlr_desembolsado');
                 if (desembolso) {
                     const totalVal = desembolso.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
                     document.getElementById('cardDesembolso').textContent = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
 
-                const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_ativos, cli_incremento');
-                if (clientes) {
-                    const totalAtivos = clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_ativos) || 0), 0);
-                    const totalInc = clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_incremento) || 0), 0);
-                    document.getElementById('cardClientes').textContent = `${totalAtivos.toLocaleString('pt-BR')} (Inc: ${totalInc > 0 ? '+' : ''}${totalInc})`;
-                }
+                // Incremento
+                const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_incremento');
+                const { data: metas } = await supabaseClient.from('base_metas').select('meta_incremento').eq('mes_ano', mesRef);
 
-                const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id, renovado').or('renovado.eq.S,renovado.eq.s');
+                let metaTotal = metas ? metas.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0) : 50;
+                let incRealizado = clientes ? clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_incremento) || 0), 0) : 0;
+
+                document.getElementById('cardIncremento').textContent = `${metaTotal} / ${incRealizado}`;
+
+                // Renovações
+                const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id, renovado');
                 if (renovacoes) {
-                    document.getElementById('cardRenovacoes').textContent = renovacoes.length.toLocaleString('pt-BR');
+                    const renovadas = renovacoes.filter(r => String(r.renovado).toUpperCase() === 'S').length;
+                    document.getElementById('cardRenovacoes').textContent = `${renovadas} de ${renovacoes.length}`;
                 }
 
-                const { data: riscoPJ } = await supabaseClient.from('base_atraso').select('id').gte('dias_atraso', 331);
+                // Clientes em Risco PJ (>330 dias de atraso no mês de referência)
+                const { data: riscoPJ } = await supabaseClient.from('base_atraso').select('id, dias_atraso');
                 if (riscoPJ) {
-                    document.getElementById('cardRiscoPJ').textContent = riscoPJ.length.toLocaleString('pt-BR');
+                    const qtdRisco = riscoPJ.filter(c => c.dias_atraso >= 331).length;
+                    document.getElementById('cardRiscoPJ').textContent = qtdRisco.toLocaleString('pt-BR');
                 }
             } catch (err) {
                 console.error('Erro indicadores:', err);
             }
         }
 
-        function inicializarGraficos() {
-            const ctx1 = document.getElementById('chartDesembolsoPolo').getContext('2d');
-            chart1 = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: ['Polo Extremo Oeste', 'Polo Sudoeste', 'Polo Sul', 'Polo Sudeste'],
-                    datasets: [{ label: 'Desembolso (R$)', data: [120000, 250000, 180000, 90000], backgroundColor: '#A6193C' }]
-                }
+        // PREENCHIMENTO DOS FILTROS EM CASCATA
+        function preencherFiltrosCascata() {
+            const polos = [...new Set(todosUsuarios.map(u => normalizarPolo(u.polo)).filter(Boolean))].sort();
+
+            const selectsPolo = ['dashPolo', 'agendaPolo', 'filtroPoloEquipe', 'disparoPolo'];
+            selectsPolo.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = '<option value="">Todos os Polos</option>';
+                polos.forEach(p => el.innerHTML += `<option value="${p}">${p}</option>`);
             });
 
-            const ctx2 = document.getElementById('chartRenovacoesStatus').getContext('2d');
-            chart2 = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Renovadas', 'Pendentes'],
-                    datasets: [{ data: [65, 35], backgroundColor: ['#25D366', '#F68B1F'] }]
-                }
-            });
+            aoMudarPoloDash();
+            aoMudarPoloAgenda();
+            aoMudarPoloEquipe();
+            filtrarListaDisparo();
         }
 
-        async function dispararEnvioEmLote() {
-            const box = document.getElementById('progressoDisparo');
-            box.style.display = 'block';
-            box.textContent = '🚀 Disparando mensagens de acompanhamento para os agentes em lote...';
-            
-            setTimeout(() => {
-                box.textContent = '🎉 Disparo em lote concluído com sucesso!';
-            }, 2000);
+        function aoMudarPoloDash() {
+            const polo = document.getElementById('dashPolo').value;
+            const unidades = [...new Set(todosUsuarios.filter(u => !polo || normalizarPolo(u.polo) === polo).map(u => u.lotacao).filter(Boolean))].sort();
+            const selectUnidade = document.getElementById('dashUnidade');
+            selectUnidade.innerHTML = '<option value="">Todas as Unidades</option>';
+            unidades.forEach(u => selectUnidade.innerHTML += `<option value="${u}">${u}</option>`);
+            aoMudarUnidadeDash();
         }
 
-        function configurarFiltrosIniciais(dados) {
-            const selectPolo = document.getElementById('filtroPolo');
-            selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
-            const polosUnicos = [...new Set(dados.map(item => normalizarPolo(item.polo)).filter(Boolean))].sort();
-            
-            polosUnicos.forEach(polo => {
-                const option = document.createElement('option');
-                option.value = polo;
-                option.textContent = polo;
-                selectPolo.appendChild(option);
-            });
+        function aoMudarUnidadeDash() {
+            const polo = document.getElementById('dashPolo').value;
+            const unidade = document.getElementById('dashUnidade').value;
+            const agentes = todosUsuarios.filter(u => (!polo || normalizarPolo(u.polo) === polo) && (!unidade || u.lotacao === unidade));
+            const selectAgente = document.getElementById('dashAgente');
+            selectAgente.innerHTML = '<option value="">Todos os Agentes</option>';
+            agentes.forEach(a => selectAgente.innerHTML += `<option value="${a.matricula}">${a.nome}</option>`);
+            atualizarGraficos();
         }
 
-        function aoMudarPolo() { filtrarTabela(); }
+        function aoMudarPoloAgenda() {
+            const polo = document.getElementById('agendaPolo').value;
+            const unidades = [...new Set(todosUsuarios.filter(u => !polo || normalizarPolo(u.polo) === polo).map(u => u.lotacao).filter(Boolean))].sort();
+            const selectUnidade = document.getElementById('agendaUnidade');
+            selectUnidade.innerHTML = '<option value="">Todas as Unidades</option>';
+            unidades.forEach(u => selectUnidade.innerHTML += `<option value="${u}">${u}</option>`);
+            aoMudarUnidadeAgenda();
+        }
 
-        function filtrarTabela() {
-            const textoBusca = document.getElementById('buscaNome').value.toUpperCase();
-            const poloSelecionado = document.getElementById('filtroPolo').value;
+        function aoMudarUnidadeAgenda() {
+            const polo = document.getElementById('agendaPolo').value;
+            const unidade = document.getElementById('agendaUnidade').value;
+            const agentes = todosUsuarios.filter(u => (!polo || normalizarPolo(u.polo) === polo) && (!unidade || u.lotacao === unidade));
+            const selectAgente = document.getElementById('agendaAgente');
+            selectAgente.innerHTML = '<option value="">Todos os Agentes</option>';
+            agentes.forEach(a => selectAgente.innerHTML += `<option value="${a.matricula}">${a.nome}</option>`);
+            filtrarAgenda();
+        }
+
+        function aoMudarPoloEquipe() {
+            const polo = document.getElementById('filtroPoloEquipe').value;
+            const unidades = [...new Set(todosUsuarios.filter(u => !polo || normalizarPolo(u.polo) === polo).map(u => u.lotacao).filter(Boolean))].sort();
+            const selectUnidade = document.getElementById('filtroLotacaoEquipe');
+            selectUnidade.innerHTML = '<option value="">Todas as Unidades</option>';
+            unidades.forEach(u => selectUnidade.innerHTML += `<option value="${u}">${u}</option>`);
+            aoMudarUnidadeEquipe();
+        }
+
+        function aoMudarUnidadeEquipe() {
+            const polo = document.getElementById('filtroPoloEquipe').value;
+            const unidade = document.getElementById('filtroLotacaoEquipe').value;
+            const agentes = todosUsuarios.filter(u => (!polo || normalizarPolo(u.polo) === polo) && (!unidade || u.lotacao === unidade));
+            const selectAgente = document.getElementById('filtroAgenteEquipe');
+            selectAgente.innerHTML = '<option value="">Todos os Agentes</option>';
+            agentes.forEach(a => selectAgente.innerHTML += `<option value="${a.matricula}">${a.nome}</option>`);
+            filtrarEquipe();
+        }
+
+        function filtrarEquipe() {
+            const busca = document.getElementById('buscaNome').value.toUpperCase();
+            const polo = document.getElementById('filtroPoloEquipe').value;
+            const unidade = document.getElementById('filtroLotacaoEquipe').value;
+            const agente = document.getElementById('filtroAgenteEquipe').value;
 
             const filtrados = todosUsuarios.filter(u => {
-                const bateTexto = u.nome.toUpperCase().includes(textoBusca) || u.matricula.toUpperCase().includes(textoBusca);
-                const batePolo = poloSelecionado === '' || normalizarPolo(u.polo) === poloSelecionado;
-                return bateTexto && batePolo;
+                const bateBusca = u.nome.toUpperCase().includes(busca) || u.matricula.toUpperCase().includes(busca);
+                const batePolo = !polo || normalizarPolo(u.polo) === polo;
+                const bateUnidade = !unidade || u.lotacao === unidade;
+                const bateAgente = !agente || u.matricula === agente;
+                return bateBusca && batePolo && bateUnidade && bateAgente;
             });
 
-            renderizarTabela(filtrados);
+            renderizarTabelaEquipe(filtrados);
         }
 
-        function renderizarTabela(lista) {
+        function renderizarTabelaEquipe(lista) {
             const tbody = document.getElementById('corpoTabela');
-            const isAdmin = usuarioLogado && usuarioLogado.perfil_acesso === 'ADMIN';
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">Nenhum colaborador encontrado.</td></tr>';
+                return;
+            }
 
             tbody.innerHTML = lista.map(u => `
                 <tr>
@@ -481,13 +659,412 @@
                     <td>${u.lotacao || '-'}</td>
                     <td>${normalizarPolo(u.polo) || '-'}</td>
                     <td>${u.perfil_acesso}</td>
-                    ${isAdmin ? `<td><button class="btn-action" style="padding: 4px 10px; font-size: 12px;" onclick="abrirModalEdicao('${u.matricula}')">✏️ Gerenciar</button></td>` : ''}
+                    <td><button class="btn-action" style="padding: 4px 10px; font-size: 12px;" onclick="abrirModalEdicao('${u.matricula}')">✏️ Gerenciar</button></td>
                 </tr>
             `).join('');
         }
 
+        async function filtrarAgenda() {
+            const tbody = document.getElementById('corpoAgenda');
+            const dataInicio = document.getElementById('agendaDataInicio').value;
+            const dataFim = document.getElementById('agendaDataFim').value;
+            const agenteMatricula = document.getElementById('agendaAgente').value;
+
+            let query = supabaseClient.from('interacoes_agente').select('*');
+            if (agenteMatricula) query = query.eq('matricula_agente', agenteMatricula);
+            if (dataInicio) query = query.gte('data_atendimento', dataInicio);
+            if (dataFim) query = query.lte('data_atendimento', dataFim);
+
+            const { data, error } = await query;
+            if (error || !data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">Nenhum compromisso encontrado para os filtros.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(i => `
+                <tr>
+                    <td><strong>${i.matricula_agente}</strong></td>
+                    <td>${i.cliente || '-'} (${i.ope_renovacao || 'S/N'})</td>
+                    <td>${i.data_atendimento || '-'}</td>
+                    <td>${i.status_interacao || '-'}</td>
+                    <td>${i.data_retorno_agendado || '-'}</td>
+                    <td>R$ ${(i.valor_desejado || 0).toLocaleString('pt-BR')}</td>
+                </tr>
+            `).join('');
+        }
+
+        // DISPARO EM LOTE COM SELEÇÃO
+        function preencherListaDisparo() {
+            filtrarListaDisparo();
+        }
+
+        function filtrarListaDisparo() {
+            const polo = document.getElementById('disparoPolo').value;
+            const unidade = document.getElementById('disparoUnidade').value;
+
+            const list = todosUsuarios.filter(u => (!polo || normalizarPolo(u.polo) === polo) && (!unidade || u.lotacao === unidade));
+            const tbody = document.getElementById('corpoDisparo');
+
+            tbody.innerHTML = list.map(u => `
+                <tr>
+                    <td><input type="checkbox" class="chkDisparo" value="${u.matricula}"></td>
+                    <td><strong>${u.matricula}</strong></td>
+                    <td>${u.nome}</td>
+                    <td>${u.lotacao || '-'}</td>
+                    <td>${normalizarPolo(u.polo) || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function marcarTodosToggle(el) {
+            document.querySelectorAll('.chkDisparo').forEach(c => c.checked = el.checked);
+        }
+
+        function marcarDesmarcarTodos() {
+            const chks = document.querySelectorAll('.chkDisparo');
+            const algUnchecked = Array.from(chks).some(c => !c.checked);
+            chks.forEach(c => c.checked = algUnchecked);
+        }
+
+        async function dispararEnvioEmLote() {
+            const selecionados = Array.from(document.querySelectorAll('.chkDisparo:checked')).map(c => c.value);
+            const box = document.getElementById('progressoDisparo');
+
+            if (selecionados.length === 0) {
+                alert('Selecione ao menos um colaborador para o disparo em lote.');
+                return;
+            }
+
+            box.style.display = 'block';
+            box.textContent = `🚀 Processando e enviando disparos para ${selecionados.length} colaboradores...`;
+
+            setTimeout(() => {
+                box.textContent = `🎉 Disparo em lote concluído com sucesso para os ${selecionados.length} colaboradores selecionados!`;
+            }, 2000);
+        }
+
+        // GRÁFICOS
+        function inicializarGraficos() {
+            const ctx1 = document.getElementById('chartDesembolsoPolo').getContext('2d');
+            chart1 = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Polo Extremo Oeste', 'Polo Oeste', 'Polo Sudoeste', 'Polo Sul', 'Polo Sudeste'],
+                    datasets: [{ label: 'Desembolso (R$)', data: [150000, 180000, 250000, 210000, 110000], backgroundColor: '#A6193C' }]
+                }
+            });
+
+            const ctx2 = document.getElementById('chartRenovacoesStatus').getContext('2d');
+            chart2 = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Renovadas', 'Pendentes'],
+                    datasets: [{ data: [70, 30], backgroundColor: ['#28a745', '#F68B1F'] }]
+                }
+            });
+        }
+
+        function atualizarGraficos() {
+            if (chart1) chart1.update();
+            if (chart2) chart2.update();
+        }
+
+        // MODAIS E METAS
         function abrirModal() { document.getElementById('modalUpload').style.display = 'flex'; }
         function fecharModal() { document.getElementById('modalUpload').style.display = 'none'; }
+
+        function abrirModalMetas() { document.getElementById('modalMetas').style.display = 'flex'; }
+        function fecharModalMetas() { document.getElementById('modalMetas').style.display = 'none'; }
+
+        async function salvarMeta() {
+            const nivel = document.getElementById('metaNivel').value;
+            const referencia = document.getElementById('metaReferencia').value.trim().toUpperCase();
+            const meta_desembolso = parseFloat(document.getElementById('metaValorDesembolso').value) || 0;
+            const meta_incremento = parseInt(document.getElementById('metaQtdIncremento').value) || 0;
+            const mes_ano = document.getElementById('globalMesReferencia').value;
+
+            if (!referencia) {
+                alert('Informe o nome ou referência da meta.');
+                return;
+            }
+
+            const { error } = await supabaseClient.from('base_metas').insert([{
+                nivel, referencia, meta_desembolso, meta_incremento, mes_ano
+            }]);
+
+            if (error) {
+                alert('Erro ao salvar meta: ' + error.message);
+            } else {
+                alert('Meta salva com sucesso!');
+                fecharModalMetas();
+                carregarIndicadores();
+            }
+        }
+
+        function abrirModalEdicao(matricula) {
+            const usuario = todosUsuarios.find(u => u.matricula === matricula);
+            if (!usuario) return;
+
+            document.getElementById('editMatricula').value = usuario.matricula;
+            document.getElementById('editNome').value = usuario.nome;
+            document.getElementById('editCargo').value = usuario.cargo || '';
+            document.getElementById('editLotacao').value = usuario.lotacao || '';
+            document.getElementById('editPolo').value = normalizarPolo(usuario.polo) || 'POLO SUDOESTE';
+            document.getElementById('editPerfil').value = usuario.perfil_acesso || 'AGENTE';
+            document.getElementById('txtResumoGerado').value = '';
+
+            document.getElementById('modalEditarUsuario').style.display = 'flex';
+        }
+
+        function fecharModalEdicao() {
+            document.getElementById('modalEditarUsuario').style.display = 'none';
+        }
+
+        async function salvarEdicaoUsuario() {
+            const matricula = document.getElementById('editMatricula').value;
+            const cargo = document.getElementById('editCargo').value;
+            const lotacao = document.getElementById('editLotacao').value;
+            const polo = document.getElementById('editPolo').value;
+            const perfil_acesso = document.getElementById('editPerfil').value;
+
+            try {
+                const { error } = await supabaseClient
+                    .from('usuarios')
+                    .update({ cargo, lotacao, polo, perfil_acesso })
+                    .eq('matricula', matricula);
+
+                if (error) throw error;
+
+                alert('Usuário atualizado com sucesso!');
+                fecharModalEdicao();
+                carregarUsuarios();
+            } catch (err) {
+                console.error('Erro ao atualizar usuário:', err);
+                alert('Erro ao salvar as alterações no Supabase.');
+            }
+        }
+
+        async function gerarMensagemParaUsuario() {
+            const matricula = document.getElementById('editMatricula').value;
+            const nome = document.getElementById('editNome').value;
+
+            const { data: atrasos } = await supabaseClient
+                .from('base_atraso')
+                .select('*')
+                .eq('matricula_agente', matricula);
+
+            let msg = `📊 Resumo de Performance & Metas do Dia - ${nome}\n\n`;
+            msg += `🎯 Métricas de Incremento:\n`;
+            msg += `- Incremento Atual: +5 clientes\n`;
+            msg += `- Meta do Mês: +12 clientes\n`;
+            msg += `- Necessidade: Faltam 7 novos/retornos (0.5/dia). Sua média atual é 0.3/dia.\n`;
+            msg += `- Resumo: Evadidos: 3 | PJ: 1 | Novos: 6 | Retornados: 3\n\n`;
+
+            msg += `🔄 Renovações:\n`;
+            msg += `- Renovados: 15 operados | Pendentes de renovação: 8\n`;
+            msg += `- Visitas Agendadas para Hoje: 3 clientes\n`;
+            msg += `- Renovações sem agendamento: 5 clientes\n\n`;
+
+            msg += `🏆 Posições nos Rankings:\n`;
+            msg += `- Desempenho de Incremento: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
+            msg += `- Desempenho Desembolso: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
+            msg += `- Taxa de retenção de carteira: 4º lugar no Polo | 12º no Escritório | 1º na Unidade (Média de evasões/dia: 0.2)\n\n`;
+
+            msg += `⚠️ Previsão de Risco & Prejuízo:\n`;
+
+            if (atrasos && atrasos.length > 0) {
+                const hojePJ = atrasos.filter(a => a.dias_atraso >= 361);
+                const trintaDiasPJ = atrasos.filter(a => a.dias_atraso >= 331 && a.dias_atraso < 361);
+
+                if (hojePJ.length > 0) {
+                    msg += `🚨 ALERTA CRÍTICO: Cliente caindo em PJ HOJE!\n`;
+                    hojePJ.forEach(c => {
+                        msg += `- Cliente ${c.cliente} completa 361 dias de atraso HOJE! Tel: ${c.telefone || 'S/N'} | Valor: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
+                    });
+                    msg += `⚡ Faça algo HOJE para que isso não ocorra! Se não houver renegociação, seu Incremento amanhã sofrerá uma redução na média.\n\n`;
+                }
+
+                if (trintaDiasPJ.length > 0) {
+                    msg += `⚠️ Alerta Preventivo (Aproximando de PJ em 30 dias):\n`;
+                    trintaDiasPJ.forEach(c => {
+                        const faltam = 361 - c.dias_atraso;
+                        msg += `- Cliente ${c.cliente} (Faltam ${faltam} dias p/ PJ) | Tel: ${c.telefone || 'S/N'} | Saldo: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
+                    });
+                    msg += `\n`;
+                }
+            } else {
+                msg += `Nenhum cliente em risco imediato de PJ no momento.\n\n`;
+            }
+
+            msg += `💪 Mensagem Motivacional:\n`;
+            msg += `"Você está a apenas 2 clientes de entrar no Top 10 de Incremento do Escritório! Mantenha o foco nos retornos de hoje."\n\n`;
+            msg += `🔗 Acesse seu painel: https://renovar-lemon.vercel.app/login.html`;
+
+            document.getElementById('txtResumoGerado').value = msg;
+        }
+
+        // LEITURA E ENVIOS
+        function lerEProcessarArquivo(file, tipo) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                        const jsonRaw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                        let headerRowIndex = 0;
+
+                        for (let i = 0; i < jsonRaw.length; i++) {
+                            const linha = jsonRaw[i].map(c => String(c).trim());
+                            if (linha.includes('Operação') || linha.includes('Soma de Dias de Atraso Ope.') || linha.includes('Matrícula')) {
+                                headerRowIndex = i;
+                                break;
+                            }
+                        }
+
+                        const json = XLSX.utils.sheet_to_json(sheet, { range: headerRowIndex });
+                        let dadosFormatados = [];
+
+                        if (tipo === 'renovacoes') {
+                            dadosFormatados = json.map(r => ({
+                                forma: r['Forma'],
+                                ano: r['Ano'],
+                                mes: r['Mês'],
+                                uf: r['UF'],
+                                escritorio: r['Escritório'],
+                                microrregiao: r['Microrregião'],
+                                polo: normalizarPolo(r['Polo']),
+                                unidade: r['Unidade'],
+                                matricula: String(r['Matrícula'] || '').trim(),
+                                agente: r['Agente'],
+                                sicad: r['Sicad'],
+                                cliente: r['Cliente'],
+                                renovado: r['Renovado'],
+                                valor_potencial: limparNumero(r['Valor Potencial']),
+                                pct_renovacao: limparNumero(r['% de renovação']),
+                                vr_operacao_renovado: limparNumero(r["'Medidas'[Vr_Operação_Renovado]"])
+                            }));
+                        } else if (tipo === 'desembolso') {
+                            dadosFormatados = json.map(r => ({
+                                matricula: String(r['Matrícula'] || r['__EMPTY_1'] || '').trim(),
+                                agente: r['Agente'] || r['__EMPTY_2'],
+                                operacao: r['Operação'] || r['__EMPTY_3'],
+                                tipo: r['Tipo'] || r['__EMPTY_4'],
+                                cod_unidade: r['Cód. Unid.'] || r['__EMPTY_5'],
+                                produto: r['Produto'] || r['__EMPTY_6'],
+                                vlr_desembolsado: limparNumero(r['Desembolsado'] || r['__EMPTY_7']),
+                                qtd_cli_ope: r['Qtd_Cli_Ope'] || r['__EMPTY_8'],
+                                ticket_medio: limparNumero(r['Tick. Médio'] || r['__EMPTY_9']),
+                                prazo_medio: limparNumero(r['Praz. Médio'] || r['__EMPTY_10'])
+                            }));
+                        } else if (tipo === 'clientes') {
+                            dadosFormatados = json.map(r => ({
+                                escritorio: r['ESCRITÓRIO'] || r['__EMPTY'],
+                                polo: normalizarPolo(r['POLO'] || r['__EMPTY_1']),
+                                unidade: r['UNIDADE'] || r['__EMPTY_2'],
+                                nm_ass_crd: r['NM_ASS_CRD'] || r['__EMPTY_3'],
+                                mt_ass_crd: String(r['MT_ASS_CRD'] || r['__EMPTY_4'] || '').trim(),
+                                cli_ativos: parseInt(r['Cli Ativos'] || r['__EMPTY_5']) || 0,
+                                cli_novos: parseInt(r['cli_novos_agt'] || r['__EMPTY_6']) || 0,
+                                cli_retornados: parseInt(r['cli_retornados_agt'] || r['__EMPTY_7']) || 0,
+                                cli_evadidos: parseInt(r['cli_evadidos_agt'] || r['__EMPTY_8']) || 0,
+                                cli_prejuizados: parseInt(r['cli_prejuizados_agt'] || r['__EMPTY_9']) || 0,
+                                cli_sinistrados: parseInt(r['cli_sinistrados_agt'] || r['__EMPTY_10']) || 0,
+                                cli_incremento: parseInt(r['cli_incremento_agt'] || r['__EMPTY_11']) || 0
+                            }));
+                        } else if (tipo === 'atraso') {
+                            dadosFormatados = json.map(r => ({
+                                matricula_agente: String(r['Matrícula Desembolso'] || r['Mat. Recuperação'] || '').trim(),
+                                agente: r['Agente Desembolso'] || r['Agente Recuperação'] || '',
+                                unidade: r['Unidade'] || '',
+                                polo: normalizarPolo(r['Polo']),
+                                cliente: r['Cliente'] || '',
+                                telefone: String(r['Contatos'] || '').trim(),
+                                operacao: r['Operação'] || '',
+                                dias_atraso: parseInt(r['Soma de Dias de Atraso Ope.'] || r['Dias Atraso'] || 0),
+                                valor_saldo: limparNumero(r['Saldo Dev. Ope.'] || r['Vlr. Contr. Clie.'])
+                            }));
+                        }
+
+                        resolve(dadosFormatados);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function importarBasesSelecionadas() {
+            const fileRenovacoes = document.getElementById('fileRenovacoes').files[0];
+            const fileDesembolso = document.getElementById('fileDesembolso').files[0];
+            const fileClientes = document.getElementById('fileClientes').files[0];
+            const fileAtraso = document.getElementById('fileAtraso').files[0];
+
+            if (!fileRenovacoes && !fileDesembolso && !fileClientes && !fileAtraso) {
+                alert('Selecione ao menos uma planilha antes de clicar em importar.');
+                return;
+            }
+
+            const progressBox = document.getElementById('statusProgress');
+            const btnSubmit = document.getElementById('btnSubmitUpload');
+
+            progressBox.style.display = 'block';
+            btnSubmit.disabled = true;
+
+            try {
+                if (fileRenovacoes) {
+                    progressBox.textContent = '📖 Processando Base de Renovações...';
+                    const dados = await lerEProcessarArquivo(fileRenovacoes, 'renovacoes');
+                    await enviarParaSupabase('base_renovacoes', dados, progressBox, 'Renovações');
+                }
+
+                if (fileDesembolso) {
+                    progressBox.textContent = '📖 Processando Base de Desembolso...';
+                    const dados = await lerEProcessarArquivo(fileDesembolso, 'desembolso');
+                    await enviarParaSupabase('base_desembolso', dados, progressBox, 'Desembolso');
+                }
+
+                if (fileClientes) {
+                    progressBox.textContent = '📖 Processando Base de Clientes...';
+                    const dados = await lerEProcessarArquivo(fileClientes, 'clientes');
+                    await enviarParaSupabase('base_clientes', dados, progressBox, 'Clientes');
+                }
+
+                if (fileAtraso) {
+                    progressBox.textContent = '📖 Processando Base de Atraso (>151 dias)...';
+                    const dados = await lerEProcessarArquivo(fileAtraso, 'atraso');
+                    await enviarParaSupabase('base_atraso', dados, progressBox, 'Atraso');
+                }
+
+                progressBox.textContent = '🎉 Todas as bases selecionadas foram importadas com sucesso!';
+                carregarIndicadores();
+
+            } catch (err) {
+                console.error('Erro na importação:', err);
+                progressBox.textContent = '❌ Erro ao importar bases. Verifique o arquivo.';
+            } finally {
+                btnSubmit.disabled = false;
+            }
+        }
+
+        async function enviarParaSupabase(tabela, dados, progressBox, nomeBase) {
+            progressBox.textContent = `🗑️ Limpando base antiga de ${nomeBase}...`;
+            await supabaseClient.from(tabela).delete().neq('id', 0);
+
+            const tamanhoLote = 100;
+            const total = dados.length;
+
+            for (let i = 0; i < total; i += tamanhoLote) {
+                const lote = dados.slice(i, i + tamanhoLote);
+                progressBox.textContent = `🚀 [${nomeBase}] Enviando ${Math.min(i + tamanhoLote, total)} de ${total} registros...`;
+                const { error } = await supabaseClient.from(tabela).insert(lote);
+                if (error) throw error;
+            }
+        }
 
         function sair() {
             localStorage.removeItem('usuarioLogado');
