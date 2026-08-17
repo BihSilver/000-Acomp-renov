@@ -182,7 +182,6 @@
         <div class="user-info">
             <span><strong id="nomeUsuario">Carregando...</strong> (<span id="perfilUsuario">---</span>)</span>
             <button id="btnModalUploadHeader" class="btn-action" style="display:none;" onclick="abrirModal()">📤 Importar Bases Excel</button>
-            <button id="btnCadastrarMeta" class="btn-action" style="display:none; background:#28a745;" onclick="abrirModalMetas()">🎯 Definir Metas</button>
             <button class="btn-action" onclick="sair()">Sair</button>
         </div>
     </header>
@@ -355,45 +354,11 @@
             <div class="upload-group"><label>2. Base de Desembolso Diário (.xlsx)</label><input type="file" id="fileDesembolso" accept=".xlsx, .xls"></div>
             <div class="upload-group"><label>3. Base de Clientes (.xlsx)</label><input type="file" id="fileClientes" accept=".xlsx, .xls"></div>
             <div class="upload-group"><label>4. Base de Operações em Atraso (>151 dias) (.xlsx)</label><input type="file" id="fileAtraso" accept=".xlsx, .xls"></div>
+            <div class="upload-group"><label>5. Planilha Oficial de Metas (VTC_Metas_2026.xlsx)</label><input type="file" id="fileMetas" accept=".xlsx, .xls"></div>
 
             <button id="btnSubmitUpload" class="btn-action" style="width:100%; margin-top:10px; padding: 12px;" onclick="importarBasesSelecionadas()">🚀 Importar Bases Selecionadas</button>
             <div id="statusProgress">Aguardando arquivos...</div>
             <button class="btn-action close-btn" style="width:100%;" onclick="fecharModal()">Fechar</button>
-        </div>
-    </div>
-
-    <!-- Modal para Gerenciar Metas (ADMIN/Gestor) -->
-    <div id="modalMetas" class="modal">
-        <div class="modal-content">
-            <h3>Cadastrar / Alterar Metas</h3>
-            
-            <div class="upload-group">
-                <label>Nível da Meta</label>
-                <select id="metaNivel">
-                    <option value="ESCRITORIO">Escritório Regional</option>
-                    <option value="POLO">Polo</option>
-                    <option value="UNIDADE">Unidade</option>
-                    <option value="AGENTE">Agente</option>
-                </select>
-            </div>
-
-            <div class="upload-group">
-                <label>Nome / Referência (Ex: POLO SUDOESTE, VITORIA DA CONQUISTA VTC ou Matrícula)</label>
-                <input type="text" id="metaReferencia" placeholder="Digite o nome do polo, unidade ou matrícula...">
-            </div>
-
-            <div class="upload-group">
-                <label>Meta de Desembolso (R$)</label>
-                <input type="number" id="metaValorDesembolso" placeholder="Ex: 500000">
-            </div>
-
-            <div class="upload-group">
-                <label>Meta de Incremento (Qtd Clientes)</label>
-                <input type="number" id="metaQtdIncremento" placeholder="Ex: 20">
-            </div>
-
-            <button class="btn-action" style="width:100%;" onclick="salvarMeta()">Salvar Meta</button>
-            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalMetas()">Cancelar</button>
         </div>
     </div>
 
@@ -456,7 +421,6 @@
 
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUploadHeader').style.display = 'inline-block';
-                document.getElementById('btnCadastrarMeta').style.display = 'inline-block';
                 document.getElementById('btnTabEnvio').style.display = 'inline-block';
             }
 
@@ -516,7 +480,7 @@
 
         async function carregarIndicadores() {
             try {
-                const mesRef = document.getElementById('globalMesReferencia').value;
+                const mesRef = document.getElementById('globalMesReferencia').value; // Ex: "2026-08"
 
                 // Total Desembolsado
                 const { data: desembolso } = await supabaseClient.from('base_desembolso').select('vlr_desembolsado');
@@ -527,9 +491,9 @@
 
                 // Incremento
                 const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_incremento');
-                const { data: metas } = await supabaseClient.from('base_metas').select('meta_incremento').eq('mes_ano', mesRef);
+                const { data: metas } = await supabaseClient.from('base_metas_oficial').select('meta_incremento');
 
-                let metaTotal = metas ? metas.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0) : 50;
+                let metaTotal = metas ? metas.reduce((acc, curr) => acc + (curr.meta_incremento || 0), 0) : 0;
                 let incRealizado = clientes ? clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_incremento) || 0), 0) : 0;
 
                 document.getElementById('cardIncremento').textContent = `${metaTotal} / ${incRealizado}`;
@@ -541,7 +505,7 @@
                     document.getElementById('cardRenovacoes').textContent = `${renovadas} de ${renovacoes.length}`;
                 }
 
-                // Clientes em Risco PJ (>330 dias de atraso no mês de referência)
+                // Clientes em Risco PJ (>330 dias de atraso)
                 const { data: riscoPJ } = await supabaseClient.from('base_atraso').select('id, dias_atraso');
                 if (riscoPJ) {
                     const qtdRisco = riscoPJ.filter(c => c.dias_atraso >= 331).length;
@@ -552,7 +516,6 @@
             }
         }
 
-        // PREENCHIMENTO DOS FILTROS EM CASCATA
         function preencherFiltrosCascata() {
             const polos = [...new Set(todosUsuarios.map(u => normalizarPolo(u.polo)).filter(Boolean))].sort();
 
@@ -677,7 +640,7 @@
 
             const { data, error } = await query;
             if (error || !data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6">Nenhum compromisso encontrado para os filtros.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6">Nenhum registro encontrado para os filtros.</td></tr>';
                 return;
             }
 
@@ -693,7 +656,6 @@
             `).join('');
         }
 
-        // DISPARO EM LOTE COM SELEÇÃO
         function preencherListaDisparo() {
             filtrarListaDisparo();
         }
@@ -743,13 +705,12 @@
             }, 2000);
         }
 
-        // GRÁFICOS
         function inicializarGraficos() {
             const ctx1 = document.getElementById('chartDesembolsoPolo').getContext('2d');
             chart1 = new Chart(ctx1, {
                 type: 'bar',
                 data: {
-                    labels: ['Polo Extremo Oeste', 'Polo Oeste', 'Polo Sudoeste', 'Polo Sul', 'Polo Sudeste'],
+                    labels: ['Extremo Oeste', 'Oeste', 'Sudoeste', 'Sul', 'Sudeste'],
                     datasets: [{ label: 'Desembolso (R$)', data: [150000, 180000, 250000, 210000, 110000], backgroundColor: '#A6193C' }]
                 }
             });
@@ -769,37 +730,8 @@
             if (chart2) chart2.update();
         }
 
-        // MODAIS E METAS
         function abrirModal() { document.getElementById('modalUpload').style.display = 'flex'; }
         function fecharModal() { document.getElementById('modalUpload').style.display = 'none'; }
-
-        function abrirModalMetas() { document.getElementById('modalMetas').style.display = 'flex'; }
-        function fecharModalMetas() { document.getElementById('modalMetas').style.display = 'none'; }
-
-        async function salvarMeta() {
-            const nivel = document.getElementById('metaNivel').value;
-            const referencia = document.getElementById('metaReferencia').value.trim().toUpperCase();
-            const meta_desembolso = parseFloat(document.getElementById('metaValorDesembolso').value) || 0;
-            const meta_incremento = parseInt(document.getElementById('metaQtdIncremento').value) || 0;
-            const mes_ano = document.getElementById('globalMesReferencia').value;
-
-            if (!referencia) {
-                alert('Informe o nome ou referência da meta.');
-                return;
-            }
-
-            const { error } = await supabaseClient.from('base_metas').insert([{
-                nivel, referencia, meta_desembolso, meta_incremento, mes_ano
-            }]);
-
-            if (error) {
-                alert('Erro ao salvar meta: ' + error.message);
-            } else {
-                alert('Meta salva com sucesso!');
-                fecharModalMetas();
-                carregarIndicadores();
-            }
-        }
 
         function abrirModalEdicao(matricula) {
             const usuario = todosUsuarios.find(u => u.matricula === matricula);
@@ -903,7 +835,72 @@
             document.getElementById('txtResumoGerado').value = msg;
         }
 
-        // LEITURA E ENVIOS
+        // LEITURA DA PLANILHA OFICIAL DE METAS (ABAS META DESEMBOLSO E META CLIENTES)
+        function lerPlanilhaMetasOficial(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+
+                        const mesVal = document.getElementById('globalMesReferencia').value; // Ex: "2026-08"
+                        const mesNum = parseInt(mesVal.split('-')[1]) || 8;
+                        const mesesColunas = { 1:'JAN', 2:'FEV', 3:'MAR', 4:'ABR', 5:'MAI', 6:'JUN', 7:'JUL', 8:'AGO', 9:'SET', 10:'OUT', 11:'NOV', 12:'DEZ' };
+                        const colMes = mesesColunas[mesNum] || 'AGO';
+
+                        const sheetDesembolso = workbook.Sheets['META DESEMBOLSO'];
+                        const sheetClientes = workbook.Sheets['META CLIENTES'];
+
+                        if (!sheetDesembolso || !sheetClientes) {
+                            throw new Error('A planilha precisa conter as abas "META DESEMBOLSO" e "META CLIENTES".');
+                        }
+
+                        const jsonDesembolsoRaw = XLSX.utils.sheet_to_json(sheetDesembolso, { header: 1 });
+                        let headerIndex = 1;
+                        for (let i = 0; i < jsonDesembolsoRaw.length; i++) {
+                            const l = jsonDesembolsoRaw[i].map(c => String(c).trim());
+                            if (l.includes('UNIDADE') || l.includes('POLOS')) {
+                                headerIndex = i;
+                                break;
+                            }
+                        }
+
+                        const jsonDesembolso = XLSX.utils.sheet_to_json(sheetDesembolso, { range: headerIndex });
+                        const jsonClientes = XLSX.utils.sheet_to_json(sheetClientes);
+
+                        let metasFormatadas = jsonDesembolso.map(d => {
+                            const unidadeNome = String(d['UNIDADE'] || '').trim();
+                            const poloNome = normalizarPolo(d['POLOS']);
+                            const metaDesembolsoMes = limparNumero(d[colMes]);
+
+                            const clienteMeta = jsonClientes.find(c => String(c['UNIDADE']||'').trim().toUpperCase() === unidadeNome.toUpperCase()) || {};
+                            const metaIncrementoMes = parseInt(clienteMeta['META MÊS']) || 0;
+                            const metaAtivosEstoque = parseInt(clienteMeta['META 2026']) || 0;
+
+                            return {
+                                polo: poloNome,
+                                unidade: unidadeNome,
+                                cod_unidade: d['COD'],
+                                qtd_agentes: parseInt(d['AGEN.']) || 1,
+                                meta_desembolso: metaDesembolsoMes,
+                                meta_incremento: metaIncrementoMes,
+                                meta_clientes_ativos: metaAtivosEstoque,
+                                mes_ano: mesVal
+                            };
+                        });
+
+                        resolve(metasFormatadas);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // LEITURA E ENVIOS GERAIS
         function lerEProcessarArquivo(file, tipo) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1003,8 +1000,9 @@
             const fileDesembolso = document.getElementById('fileDesembolso').files[0];
             const fileClientes = document.getElementById('fileClientes').files[0];
             const fileAtraso = document.getElementById('fileAtraso').files[0];
+            const fileMetas = document.getElementById('fileMetas').files[0];
 
-            if (!fileRenovacoes && !fileDesembolso && !fileClientes && !fileAtraso) {
+            if (!fileRenovacoes && !fileDesembolso && !fileClientes && !fileAtraso && !fileMetas) {
                 alert('Selecione ao menos uma planilha antes de clicar em importar.');
                 return;
             }
@@ -1040,12 +1038,18 @@
                     await enviarParaSupabase('base_atraso', dados, progressBox, 'Atraso');
                 }
 
+                if (fileMetas) {
+                    progressBox.textContent = '📖 Processando Planilha Oficial de Metas...';
+                    const dadosMetas = await lerPlanilhaMetasOficial(fileMetas);
+                    await enviarParaSupabase('base_metas_oficial', dadosMetas, progressBox, 'Metas Oficial');
+                }
+
                 progressBox.textContent = '🎉 Todas as bases selecionadas foram importadas com sucesso!';
                 carregarIndicadores();
 
             } catch (err) {
                 console.error('Erro na importação:', err);
-                progressBox.textContent = '❌ Erro ao importar bases. Verifique o arquivo.';
+                progressBox.textContent = '❌ Erro ao importar bases: ' + err.message;
             } finally {
                 btnSubmit.disabled = false;
             }
