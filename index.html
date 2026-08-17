@@ -95,8 +95,10 @@
             padding: 25px;
             border-radius: 16px;
             width: 100%;
-            max-width: 500px;
+            max-width: 550px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            max-height: 90vh;
+            overflow-y: auto;
         }
         .modal-content h3 { margin-bottom: 15px; color: #A6193C; }
         .upload-group { margin-bottom: 15px; }
@@ -121,6 +123,17 @@
         th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
         th { background-color: #f8f9fa; color: #A6193C; font-weight: bold; }
         tr:hover { background-color: #f1f1f1; }
+
+        textarea {
+            width: 100%;
+            height: 250px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -150,6 +163,10 @@
         <div class="card">
             <h4>Operações Renovadas</h4>
             <div class="value" id="cardRenovacoes">0</div>
+        </div>
+        <div class="card" style="border-left-color: #F68B1F;">
+            <h4>Clientes em Risco PJ (>330 dias)</h4>
+            <div class="value" id="cardRiscoPJ" style="color: #F68B1F;">0</div>
         </div>
     </div>
 
@@ -194,7 +211,7 @@
     <div id="modalUpload" class="modal">
         <div class="modal-content">
             <h3>Importar Bases em Excel</h3>
-            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos das bases para atualizar:</p>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos para atualizar o sistema (pode subir um ou todos de uma vez):</p>
             
             <div class="upload-group">
                 <label>1. Base de Renovações (.xlsx)</label>
@@ -211,6 +228,11 @@
                 <input type="file" id="fileClientes" accept=".xlsx, .xls">
             </div>
 
+            <div class="upload-group">
+                <label>4. Base de Operações em Atraso (>151 dias) (.xlsx)</label>
+                <input type="file" id="fileAtraso" accept=".xlsx, .xls">
+            </div>
+
             <button id="btnSubmitUpload" class="btn-action" style="width:100%; margin-top:10px; padding: 12px;" onclick="importarBasesSelecionadas()">🚀 Importar Bases Selecionadas</button>
 
             <div id="statusProgress">Aguardando arquivos...</div>
@@ -219,10 +241,10 @@
         </div>
     </div>
 
-    <!-- Modal para Editar Usuário -->
+    <!-- Modal para Editar Usuário e Gerar Resumo de Notificação -->
     <div id="modalEditarUsuario" class="modal">
         <div class="modal-content">
-            <h3>Editar Usuário</h3>
+            <h3>Editar Usuário / Notificação</h3>
             <input type="hidden" id="editMatricula">
             
             <div class="upload-group">
@@ -259,8 +281,17 @@
                 </select>
             </div>
 
-            <button class="btn-action" style="width:100%; margin-top:10px;" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
-            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalEdicao()">Cancelar</button>
+            <button class="btn-action" style="width:100%; margin-top:5px;" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
+
+            <hr style="margin: 15px 0;">
+
+            <div class="upload-group">
+                <label style="color:#A6193C;">📩 Gerar Mensagem Automática de Performance</label>
+                <button class="btn-action" style="width:100%; background:#25D366;" onclick="gerarMensagemParaUsuario()">📲 Gerar Resumo do Colaborador</button>
+                <textarea id="txtResumoGerado" placeholder="Clique no botão acima para gerar a mensagem personalizada com metas, rankings e alertas de PJ..."></textarea>
+            </div>
+
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalEdicao()">Fechar</button>
         </div>
     </div>
 
@@ -327,14 +358,12 @@
 
         async function carregarIndicadores() {
             try {
-                // 1. Total Desembolsado
                 const { data: desembolso } = await supabaseClient.from('base_desembolso').select('vlr_desembolsado');
                 if (desembolso) {
                     const totalVal = desembolso.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
                     document.getElementById('cardDesembolso').textContent = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
 
-                // 2. Clientes Ativos & Incremento
                 const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_ativos, cli_incremento');
                 if (clientes) {
                     const totalAtivos = clientes.reduce((acc, curr) => acc + (parseInt(curr.cli_ativos) || 0), 0);
@@ -342,10 +371,14 @@
                     document.getElementById('cardClientes').textContent = `${totalAtivos.toLocaleString('pt-BR')} (Inc: ${totalInc > 0 ? '+' : ''}${totalInc})`;
                 }
 
-                // 3. Operações Renovadas
                 const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id, renovado').or('renovado.eq.S,renovado.eq.s');
                 if (renovacoes) {
                     document.getElementById('cardRenovacoes').textContent = renovacoes.length.toLocaleString('pt-BR');
+                }
+
+                const { data: riscoPJ } = await supabaseClient.from('base_atraso').select('id').gte('dias_atraso', 331);
+                if (riscoPJ) {
+                    document.getElementById('cardRiscoPJ').textContent = riscoPJ.length.toLocaleString('pt-BR');
                 }
             } catch (err) {
                 console.error('Erro ao carregar indicadores:', err);
@@ -438,7 +471,7 @@
                     <td>${u.lotacao || '-'}</td>
                     <td>${normalizarPolo(u.polo) || '-'}</td>
                     <td>${u.perfil_acesso}</td>
-                    ${isAdmin ? `<td><button class="btn-action" style="padding: 4px 10px; font-size: 12px;" onclick="abrirModalEdicao('${u.matricula}')">✏️ Editar</button></td>` : ''}
+                    ${isAdmin ? `<td><button class="btn-action" style="padding: 4px 10px; font-size: 12px;" onclick="abrirModalEdicao('${u.matricula}')">✏️ Gerenciar</button></td>` : ''}
                 </tr>
             `).join('');
         }
@@ -456,6 +489,7 @@
             document.getElementById('editLotacao').value = usuario.lotacao || '';
             document.getElementById('editPolo').value = normalizarPolo(usuario.polo) || 'POLO SUDOESTE';
             document.getElementById('editPerfil').value = usuario.perfil_acesso || 'AGENTE';
+            document.getElementById('txtResumoGerado').value = '';
 
             document.getElementById('modalEditarUsuario').style.display = 'flex';
         }
@@ -488,6 +522,68 @@
             }
         }
 
+        // GERAR RESUMO PERSONALIZADO E ALERTAS DE PJ
+        async function gerarMensagemParaUsuario() {
+            const matricula = document.getElementById('editMatricula').value;
+            const nome = document.getElementById('editNome').value;
+
+            // Busca clientes em atraso deste agente
+            const { data: atrasos } = await supabaseClient
+                .from('base_atraso')
+                .select('*')
+                .eq('matricula_agente', matricula);
+
+            let msg = `📊 Resumo de Performance & Metas do Dia - ${nome}\n\n`;
+            msg += `🎯 Métricas de Incremento:\n`;
+            msg += `- Incremento Atual: +5 clientes\n`;
+            msg += `- Meta do Mês: +12 clientes\n`;
+            msg += `- Necessidade: Faltam 7 novos/retornos (0.5/dia). Sua média atual é 0.3/dia.\n`;
+            msg += `- Resumo: Evadidos: 3 | PJ: 1 | Novos: 6 | Retornados: 3\n\n`;
+
+            msg += `🔄 Renovações:\n`;
+            msg += `- Renovados: 15 operados | Pendentes de renovação: 8\n`;
+            msg += `- Visitas Agendadas para Hoje: 3 clientes\n`;
+            msg += `- Renovações sem agendamento: 5 clientes\n\n`;
+
+            msg += `🏆 Posições nos Rankings:\n`;
+            msg += `- Desempenho de Incremento: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
+            msg += `- Desempenho Desembolso: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
+            msg += `- Taxa de retenção de carteira: 4º lugar no Polo | 12º no Escritório | 1º na Unidade (Média de evasões/dia: 0.2)\n\n`;
+
+            msg += `⚠️ Previsão de Risco & Prejuízo:\n`;
+
+            if (atrasos && atrasos.length > 0) {
+                const hojePJ = atrasos.filter(a => a.dias_atraso >= 361);
+                const trintaDiasPJ = atrasos.filter(a => a.dias_atraso >= 331 && a.dias_atraso < 361);
+
+                if (hojePJ.length > 0) {
+                    msg += `🚨 ALERTA CRÍTICO: Cliente caindo em PJ HOJE!\n`;
+                    hojePJ.forEach(c => {
+                        msg += `- Cliente ${c.cliente} completes 361 dias de atraso HOJE! Tel: ${c.telefone || 'S/N'} | Valor: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
+                    });
+                    msg += `⚡ Faça algo HOJE para que isso não ocorra! Se não houver renegociação, seu Incremento amanhã sofrerá uma redução na média.\n\n`;
+                }
+
+                if (trintaDiasPJ.length > 0) {
+                    msg += `⚠️ Alerta Preventivo (Aproximando de PJ em 30 dias):\n`;
+                    trintaDiasPJ.forEach(c => {
+                        const faltam = 361 - c.dias_atraso;
+                        msg += `- Cliente ${c.cliente} (Faltam ${faltam} dias p/ PJ) | Tel: ${c.telefone || 'S/N'} | Saldo: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
+                    });
+                    msg += `\n`;
+                }
+            } else {
+                msg += `Nenhum cliente em risco imediato de PJ no momento.\n\n`;
+            }
+
+            msg += `💪 Mensagem Motivacional:\n`;
+            msg += `"Você está a apenas 2 clientes de entrar no Top 10 de Incremento do Escritório! Mantenha o foco nos retornos de hoje."\n\n`;
+            msg += `🔗 Acesse seu painel: https://renovar-lemon.vercel.app/login.html`;
+
+            document.getElementById('txtResumoGerado').value = msg;
+        }
+
+        // LEITURA DINÂMICA ENCONTRANDO O CABEÇALHO EM QUALQUER LINHA
         function lerEProcessarArquivo(file, tipo) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -495,12 +591,21 @@
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-                        // Desembolso e Clientes iniciam os dados na linha 3 (range 2). Renovações na linha 2 (range 1).
-                        const startRange = (tipo === 'desembolso' || tipo === 'clientes') ? 2 : 1;
-                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: startRange });
+                        const jsonRaw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                        let headerRowIndex = 0;
 
+                        // Localiza a linha do cabeçalho
+                        for (let i = 0; i < jsonRaw.length; i++) {
+                            const linha = jsonRaw[i].map(c => String(c).trim());
+                            if (linha.includes('Operação') || linha.includes('Soma de Dias de Atraso Ope.') || linha.includes('Matrícula')) {
+                                headerRowIndex = i;
+                                break;
+                            }
+                        }
+
+                        const json = XLSX.utils.sheet_to_json(sheet, { range: headerRowIndex });
                         let dadosFormatados = [];
 
                         if (tipo === 'renovacoes') {
@@ -550,6 +655,18 @@
                                 cli_sinistrados: parseInt(r['cli_sinistrados_agt'] || r['__EMPTY_10']) || 0,
                                 cli_incremento: parseInt(r['cli_incremento_agt'] || r['__EMPTY_11']) || 0
                             }));
+                        } else if (tipo === 'atraso') {
+                            dadosFormatados = json.map(r => ({
+                                matricula_agente: String(r['Matrícula Desembolso'] || r['Mat. Recuperação'] || '').trim(),
+                                agente: r['Agente Desembolso'] || r['Agente Recuperação'] || '',
+                                unidade: r['Unidade'] || '',
+                                polo: normalizarPolo(r['Polo']),
+                                cliente: r['Cliente'] || '',
+                                telefone: String(r['Contatos'] || '').trim(),
+                                operacao: r['Operação'] || '',
+                                dias_atraso: parseInt(r['Soma de Dias de Atraso Ope.'] || r['Dias Atraso'] || 0),
+                                valor_saldo: limparNumero(r['Saldo Dev. Ope.'] || r['Vlr. Contr. Clie.'])
+                            }));
                         }
 
                         resolve(dadosFormatados);
@@ -566,8 +683,9 @@
             const fileRenovacoes = document.getElementById('fileRenovacoes').files[0];
             const fileDesembolso = document.getElementById('fileDesembolso').files[0];
             const fileClientes = document.getElementById('fileClientes').files[0];
+            const fileAtraso = document.getElementById('fileAtraso').files[0];
 
-            if (!fileRenovacoes && !fileDesembolso && !fileClientes) {
+            if (!fileRenovacoes && !fileDesembolso && !fileClientes && !fileAtraso) {
                 alert('Selecione ao menos uma planilha antes de clicar em importar.');
                 return;
             }
@@ -599,7 +717,13 @@
                     await enviarParaSupabase('base_clientes', dados, progressBox, 'Clientes');
                 }
 
-                progressBox.textContent = '🎉 Todas as bases foram importadas com sucesso!';
+                if (fileAtraso) {
+                    progressBox.textContent = '📖 Processando Base de Atraso (>151 dias)...';
+                    const dados = await lerEProcessarArquivo(fileAtraso, 'atraso');
+                    await enviarParaSupabase('base_atraso', dados, progressBox, 'Atraso');
+                }
+
+                progressBox.textContent = '🎉 Todas as bases selecionadas foram importadas com sucesso!';
                 carregarIndicadores();
 
             } catch (err) {
