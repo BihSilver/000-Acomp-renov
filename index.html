@@ -34,7 +34,6 @@
         }
         .btn-action:hover { background-color: #d87515; }
 
-        /* Cards de Métricas */
         .cards-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -71,7 +70,7 @@
             min-width: 180px;
         }
 
-        /* Modal de Upload */
+        /* Modais */
         .modal {
             display: none;
             position: fixed;
@@ -97,13 +96,12 @@
 
         /* Tabela Responsiva */
         .table-responsive { width: 100%; overflow-x: auto; margin-top: 15px; }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        table { width: 100%; border-collapse: collapse; min-width: 650px; }
         th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
         th { background-color: #f8f9fa; color: #A6193C; font-weight: bold; }
         tr:hover { background-color: #f1f1f1; }
     </style>
 
-    <!-- Supabase e SheetJS para LER Excel -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -118,7 +116,7 @@
         </div>
     </header>
 
-    <!-- Cards de Resumo de Indicadores -->
+    <!-- Cards de Resumo -->
     <div class="cards-container">
         <div class="card">
             <h4>Total Desembolsado</h4>
@@ -154,10 +152,11 @@
                         <th>Lotação</th>
                         <th>Polo</th>
                         <th>Perfil</th>
+                        <th id="thAcoes" style="display:none;">Ações</th>
                     </tr>
                 </thead>
                 <tbody id="corpoTabela">
-                    <tr><td colspan="6">Carregando dados...</td></tr>
+                    <tr><td colspan="7">Carregando dados...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -191,6 +190,51 @@
         </div>
     </div>
 
+    <!-- Modal para Editar Usuário (ADMIN) -->
+    <div id="modalEditarUsuario" class="modal">
+        <div class="modal-content">
+            <h3>Editar Usuário</h3>
+            <input type="hidden" id="editMatricula">
+            
+            <div class="upload-group">
+                <label>Nome</label>
+                <input type="text" id="editNome" disabled style="background:#eee; cursor:not-allowed;">
+            </div>
+
+            <div class="upload-group">
+                <label>Cargo</label>
+                <input type="text" id="editCargo" placeholder="Ex: Assistente Regional">
+            </div>
+
+            <div class="upload-group">
+                <label>Lotação / Unidade</label>
+                <input type="text" id="editLotacao" placeholder="Ex: Vitória da Conquista">
+            </div>
+
+            <div class="upload-group">
+                <label>Polo</label>
+                <select id="editPolo">
+                    <option value="POLO EXTREMO OESTE">POLO EXTREMO OESTE</option>
+                    <option value="POLO SUDOESTE">POLO SUDOESTE</option>
+                    <option value="POLO SUL">POLO SUL</option>
+                    <option value="POLO SUDESTE">POLO SUDESTE</option>
+                </select>
+            </div>
+
+            <div class="upload-group">
+                <label>Perfil de Acesso</label>
+                <select id="editPerfil">
+                    <option value="AGENTE">AGENTE</option>
+                    <option value="GG">GG</option>
+                    <option value="ADMIN">ADMIN</option>
+                </select>
+            </div>
+
+            <button class="btn-action" style="width:100%; margin-top:10px;" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
+            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalEdicao()">Cancelar</button>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://ypesnetkhvgoxmmfdult.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZXNuZXRraHZnb3htbWZkdWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjQ3NjgsImV4cCI6MjEwMjUwMDc2OH0.qmCbtCcwAU45uG52KNOWKrNQ5qQHLwdcJ18c27Mns5U';
@@ -206,13 +250,23 @@
             document.getElementById('nomeUsuario').textContent = usuarioLogado.nome;
             document.getElementById('perfilUsuario').textContent = usuarioLogado.perfil_acesso;
 
-            // Exibir botão de upload apenas para ADMIN
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUpload').style.display = 'inline-block';
+                document.getElementById('thAcoes').style.display = 'table-cell';
             }
 
             carregarUsuarios();
             carregarIndicadores();
+        }
+
+        function normalizarPolo(polo) {
+            if (!polo) return '';
+            let p = polo.toString().trim().toUpperCase();
+            if (p === 'OESTE' || p === 'EXTREMO OESTE' || p === 'POLO OESTE') return 'POLO EXTREMO OESTE';
+            if (p === 'SUDOESTE') return 'POLO SUDOESTE';
+            if (p === 'SUL') return 'POLO SUL';
+            if (p === 'SUDESTE') return 'POLO SUDESTE';
+            return p;
         }
 
         async function carregarUsuarios() {
@@ -225,27 +279,24 @@
                 renderizarTabela(data);
             } catch (erro) {
                 console.error('Erro ao buscar dados:', erro);
-                document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="6">Erro ao carregar dados.</td></tr>';
+                document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="7">Erro ao carregar dados.</td></tr>';
             }
         }
 
         async function carregarIndicadores() {
             try {
-                // Total Desembolsado
                 const { data: desembolso } = await supabaseClient.from('base_desembolso').select('vlr_desembolsado');
                 if (desembolso) {
                     const totalVal = desembolso.reduce((acc, curr) => acc + (Number(curr.vlr_desembolsado) || 0), 0);
                     document.getElementById('cardDesembolso').textContent = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 }
 
-                // Total Clientes Ativos
                 const { data: clientes } = await supabaseClient.from('base_clientes').select('cli_ativos');
                 if (clientes) {
                     const totalCli = clientes.reduce((acc, curr) => acc + (Number(curr.cli_ativos) || 0), 0);
                     document.getElementById('cardClientes').textContent = totalCli.toLocaleString('pt-BR');
                 }
 
-                // Total Renovações
                 const { data: renovacoes } = await supabaseClient.from('base_renovacoes').select('id').eq('renovado', 'S');
                 if (renovacoes) {
                     document.getElementById('cardRenovacoes').textContent = renovacoes.length.toLocaleString('pt-BR');
@@ -257,8 +308,10 @@
 
         function renderizarTabela(lista) {
             const tbody = document.getElementById('corpoTabela');
+            const isAdmin = usuarioLogado && usuarioLogado.perfil_acesso === 'ADMIN';
+
             if (lista.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6">Nenhum registro encontrado.</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}">Nenhum registro encontrado.</td></tr>`;
                 return;
             }
 
@@ -268,15 +321,18 @@
                     <td>${u.nome}</td>
                     <td>${u.cargo || '-'}</td>
                     <td>${u.lotacao || '-'}</td>
-                    <td>${u.polo || '-'}</td>
+                    <td>${normalizarPolo(u.polo) || '-'}</td>
                     <td>${u.perfil_acesso}</td>
+                    ${isAdmin ? `<td><button class="btn-action" style="padding: 4px 10px; font-size: 12px;" onclick="abrirModalEdicao('${u.matricula}')">✏️ Editar</button></td>` : ''}
                 </tr>
             `).join('');
         }
 
         function preencherFiltroPolos(dados) {
             const selectPolo = document.getElementById('filtroPolo');
-            const polosUnicos = [...new Set(dados.map(item => item.polo).filter(Boolean))];
+            selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
+
+            const polosUnicos = [...new Set(dados.map(item => normalizarPolo(item.polo)).filter(Boolean))].sort();
             
             polosUnicos.forEach(polo => {
                 const option = document.createElement('option');
@@ -291,19 +347,62 @@
             const poloSelecionado = document.getElementById('filtroPolo').value;
 
             const filtrados = todosUsuarios.filter(u => {
+                const poloNorm = normalizarPolo(u.polo);
                 const bateTexto = u.nome.toUpperCase().includes(textoBusca) || u.matricula.toUpperCase().includes(textoBusca);
-                const batePolo = poloSelecionado === '' || u.polo === poloSelecionado;
+                const batePolo = poloSelecionado === '' || poloNorm === poloSelecionado;
                 return bateTexto && batePolo;
             });
 
             renderizarTabela(filtrados);
         }
 
-        // Funções do Modal
+        // Funções de Modal
         function abrirModal() { document.getElementById('modalUpload').style.display = 'flex'; }
         function fecharModal() { document.getElementById('modalUpload').style.display = 'none'; }
 
-        // Função Genérica para Upload de Planilhas
+        function abrirModalEdicao(matricula) {
+            const usuario = todosUsuarios.find(u => u.matricula === matricula);
+            if (!usuario) return;
+
+            document.getElementById('editMatricula').value = usuario.matricula;
+            document.getElementById('editNome').value = usuario.nome;
+            document.getElementById('editCargo').value = usuario.cargo || '';
+            document.getElementById('editLotacao').value = usuario.lotacao || '';
+            document.getElementById('editPolo').value = normalizarPolo(usuario.polo) || 'POLO SUDOESTE';
+            document.getElementById('editPerfil').value = usuario.perfil_acesso || 'AGENTE';
+
+            document.getElementById('modalEditarUsuario').style.display = 'flex';
+        }
+
+        function fecharModalEdicao() {
+            document.getElementById('modalEditarUsuario').style.display = 'none';
+        }
+
+        async function salvarEdicaoUsuario() {
+            const matricula = document.getElementById('editMatricula').value;
+            const cargo = document.getElementById('editCargo').value;
+            const lotacao = document.getElementById('editLotacao').value;
+            const polo = document.getElementById('editPolo').value;
+            const perfil_acesso = document.getElementById('editPerfil').value;
+
+            try {
+                const { error } = await supabaseClient
+                    .from('usuarios')
+                    .update({ cargo, lotacao, polo, perfil_acesso })
+                    .eq('matricula', matricula);
+
+                if (error) throw error;
+
+                alert('Usuário atualizado com sucesso!');
+                fecharModalEdicao();
+                carregarUsuarios();
+            } catch (err) {
+                console.error('Erro ao atualizar usuário:', err);
+                alert('Erro ao salvar as alterações no Supabase.');
+            }
+        }
+
+        // Upload de Planilhas
         async function uploadBase(tipo) {
             let fileInputId = '';
             let tabelaSupabase = '';
@@ -327,7 +426,6 @@
                     const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
 
-                    // Lê a planilha pulando a linha 1 de título/filtro (range: 1 significa começar do índice 1 / linha 2)
                     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: 1 });
 
                     let dadosFormatados = [];
@@ -340,7 +438,7 @@
                             uf: r['UF'],
                             escritorio: r['Escritório'],
                             microrregiao: r['Microrregião'],
-                            polo: r['Polo'],
+                            polo: normalizarPolo(r['Polo']),
                             unidade: r['Unidade'],
                             matricula: String(r['Matrícula'] || '').trim(),
                             agente: r['Agente'],
@@ -367,7 +465,7 @@
                     } else if (tipo === 'clientes') {
                         dadosFormatados = json.map(r => ({
                             escritorio: r['ESCRITÓRIO'],
-                            polo: r['POLO'],
+                            polo: normalizarPolo(r['POLO']),
                             unidade: r['UNIDADE'],
                             nm_ass_crd: r['NM_ASS_CRD'],
                             mt_ass_crd: String(r['MT_ASS_CRD'] || '').trim(),
@@ -381,21 +479,18 @@
                         }));
                     }
 
-                    // Limpa a tabela antiga para manter apenas a base mais recente
                     await supabaseClient.from(tabelaSupabase).delete().neq('id', 0);
 
-                    // Insere os novos dados
                     const { error } = await supabaseClient.from(tabelaSupabase).insert(dadosFormatados);
-
                     if (error) throw error;
 
-                    alert(`🎉 ${dadosFormatados.length} registros importados com sucesso para a base!`);
+                    alert(`🎉 ${dadosFormatados.length} registros importados com sucesso!`);
                     fecharModal();
                     carregarIndicadores();
 
                 } catch (err) {
                     console.error('Erro ao importar arquivo:', err);
-                    alert('Erro ao processar o arquivo. Verifique se o formato é correto.');
+                    alert('Erro ao processar o arquivo. Verifique o formato.');
                 }
             };
             reader.readAsArrayBuffer(file);
