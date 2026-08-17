@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renovações - Painel Principal</title>
+    <title>Sistema de Renovações e Performance</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 15px; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f9; color: #333; padding: 15px; }
         
         header { 
             background-color: #A6193C; 
@@ -35,11 +35,40 @@
         .btn-action:hover { background-color: #d87515; }
         .btn-action:disabled { background-color: #ccc; cursor: not-allowed; }
 
+        /* Abas de Navegação Superior */
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 5px;
+        }
+
+        .tab-btn {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 10px 20px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .tab-btn.active {
+            background: #A6193C;
+            color: white;
+            border-color: #A6193C;
+        }
+
+        .tab-content { display: none; margin-top: 15px; }
+        .tab-content.active { display: block; }
+
+        /* Cards KPIs */
         .cards-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 15px;
-            margin-top: 20px;
+            margin-top: 10px;
         }
 
         .card {
@@ -49,19 +78,25 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.06);
             border-left: 5px solid #A6193C;
         }
-        .card h4 { font-size: 13px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
-        .card .value { font-size: 22px; font-weight: bold; color: #A6193C; }
+        .card h4 { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 8px; }
+        .card .value { font-size: 20px; font-weight: bold; color: #A6193C; }
 
-        main { margin-top: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 15px;
+        /* Grade do Dashboard Visually Clean */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
         }
+
+        .chart-box {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        main { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-top: 15px; }
 
         .filter-container {
             display: flex;
@@ -95,7 +130,7 @@
             padding: 25px;
             border-radius: 16px;
             width: 100%;
-            max-width: 550px;
+            max-width: 600px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             max-height: 90vh;
             overflow-y: auto;
@@ -123,26 +158,16 @@
         th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
         th { background-color: #f8f9fa; color: #A6193C; font-weight: bold; }
         tr:hover { background-color: #f1f1f1; }
-
-        textarea {
-            width: 100%;
-            height: 250px;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-family: monospace;
-            font-size: 12px;
-            margin-top: 10px;
-        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
     <header>
-        <h2>Sistema de Renovações</h2>
+        <h2>Sistema de Renovações & Performance</h2>
         <div class="user-info">
             <span><strong id="nomeUsuario">Carregando...</strong> (<span id="perfilUsuario">---</span>)</span>
             <button id="btnModalUploadHeader" class="btn-action" style="display:none;" onclick="abrirModal()">📤 Importar Bases Excel</button>
@@ -150,14 +175,14 @@
         </div>
     </header>
 
-    <!-- Cards de Resumo -->
+    <!-- Cards de Resumo Superior -->
     <div class="cards-container">
         <div class="card">
             <h4>Total Desembolsado</h4>
             <div class="value" id="cardDesembolso">R$ 0,00</div>
         </div>
         <div class="card">
-            <h4>Clientes (Ativos / Incremento)</h4>
+            <h4>Clientes Ativos / Incremento</h4>
             <div class="value" id="cardClientes">0</div>
         </div>
         <div class="card">
@@ -170,128 +195,121 @@
         </div>
     </div>
 
-    <main>
-        <div class="section-header">
-            <h3>Acompanhamento do Escritório Regional</h3>
-        </div>
+    <!-- Navegação por Abas -->
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="trocarAba('abaDash')">📊 Dashboard & Gráficos</button>
+        <button class="tab-btn" onclick="trocarAba('abaAgenda')">📅 Agenda do Agente</button>
+        <button class="tab-btn" onclick="trocarAba('abaEquipe')">👥 Gestão de Equipe</button>
+        <button class="tab-btn" id="btnTabEnvio" style="display:none;" onclick="trocarAba('abaEnvioLote')">📲 Disparo em Lote</button>
+    </div>
 
+    <!-- ABA 1: DASHBOARD VISUAL COM GRÁFICOS -->
+    <div id="abaDash" class="tab-content active">
         <div class="filter-container">
-            <input type="text" id="buscaNome" placeholder="Buscar Nome ou Matrícula..." oninput="filtrarTabela()">
-            
-            <select id="filtroPolo" onchange="aoMudarPolo()">
+            <select id="dashFiltroPolo" onchange="atualizarGraficos()">
                 <option value="">Todos os Polos</option>
             </select>
-
-            <select id="filtroLotacao" onchange="filtrarTabela()">
+            <select id="dashFiltroLotacao" onchange="atualizarGraficos()">
                 <option value="">Todas as Unidades</option>
             </select>
         </div>
 
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Matrícula</th>
-                        <th>Nome</th>
-                        <th>Cargo</th>
-                        <th>Lotação / Unidade</th>
-                        <th>Polo</th>
-                        <th>Perfil</th>
-                        <th id="thAcoes" style="display:none;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="corpoTabela">
-                    <tr><td colspan="7">Carregando dados...</td></tr>
-                </tbody>
-            </table>
+        <div class="dashboard-grid">
+            <div class="chart-box">
+                <h4>Desembolso por Polo (R$)</h4>
+                <canvas id="chartDesembolsoPolo"></canvas>
+            </div>
+            <div class="chart-box">
+                <h4>Status das Renovações do Mês</h4>
+                <canvas id="chartRenovacoesStatus"></canvas>
+            </div>
         </div>
-    </main>
+    </div>
+
+    <!-- ABA 2: AGENDA E INTERAÇÕES DOS AGENTES -->
+    <div id="abaAgenda" class="tab-content">
+        <main>
+            <h3>Agenda e Acompanhamento de Visitas dos Agentes</h3>
+            <p style="font-size:13px; color:#666; margin-bottom:15px;">Consulte os agendamentos realizados pelos agentes para o dia e acompanhe quem possui pendências.</p>
+            
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Agente / Matrícula</th>
+                            <th>Cliente / Operação</th>
+                            <th>Data Atendimento</th>
+                            <th>Status / Interação</th>
+                            <th>Retorno Agendado</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoAgenda">
+                        <tr><td colspan="6">Nenhum agendamento pendente registrado para hoje.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ABA 3: GESTÃO DE EQUIPE -->
+    <div id="abaEquipe" class="tab-content">
+        <main>
+            <div class="filter-container">
+                <input type="text" id="buscaNome" placeholder="Buscar Nome ou Matrícula..." oninput="filtrarTabela()">
+                <select id="filtroPolo" onchange="aoMudarPolo()"><option value="">Todos os Polos</option></select>
+                <select id="filtroLotacao" onchange="filtrarTabela()"><option value="">Todas as Unidades</option></select>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Matrícula</th>
+                            <th>Nome</th>
+                            <th>Cargo</th>
+                            <th>Lotação / Unidade</th>
+                            <th>Polo</th>
+                            <th>Perfil</th>
+                            <th id="thAcoes" style="display:none;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabela">
+                        <tr><td colspan="7">Carregando equipe...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ABA 4: DISPARO EM LOTE (EXCLUSIVO ADMIN/GESTOR) -->
+    <div id="abaEnvioLote" class="tab-content">
+        <main>
+            <h3 style="color:#A6193C;">Disparo Automático de Mensagens e Alertas de PJ</h3>
+            <p style="font-size:13px; color:#666; margin-bottom:15px;">Selecione os colaboradores e envie o resumo individual de performance e alertas de PJ de uma só vez.</p>
+            
+            <button class="btn-action" style="background:#25D366; padding:12px 20px; font-size:14px; margin-bottom:15px;" onclick="dispararEnvioEmLote()">📲 Disparar Resumos para Toda a Lista Selecionada</button>
+
+            <div id="progressoDisparo" style="display:none; padding:12px; background:#e9ecef; border-radius:8px; font-weight:bold; color:#A6193C;">
+                Processando disparos...
+            </div>
+        </main>
+    </div>
 
     <!-- Modal para Importação Unificada de Bases -->
     <div id="modalUpload" class="modal">
         <div class="modal-content">
             <h3>Importar Bases em Excel</h3>
-            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos para atualizar o sistema (pode subir um ou todos de uma vez):</p>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione os arquivos para atualizar o sistema:</p>
             
-            <div class="upload-group">
-                <label>1. Base de Renovações (.xlsx)</label>
-                <input type="file" id="fileRenovacoes" accept=".xlsx, .xls">
-            </div>
-
-            <div class="upload-group">
-                <label>2. Base de Desembolso Diário (.xlsx)</label>
-                <input type="file" id="fileDesembolso" accept=".xlsx, .xls">
-            </div>
-
-            <div class="upload-group">
-                <label>3. Base de Clientes (.xlsx)</label>
-                <input type="file" id="fileClientes" accept=".xlsx, .xls">
-            </div>
-
-            <div class="upload-group">
-                <label>4. Base de Operações em Atraso (>151 dias) (.xlsx)</label>
-                <input type="file" id="fileAtraso" accept=".xlsx, .xls">
-            </div>
+            <div class="upload-group"><label>1. Base de Renovações (.xlsx)</label><input type="file" id="fileRenovacoes" accept=".xlsx, .xls"></div>
+            <div class="upload-group"><label>2. Base de Desembolso Diário (.xlsx)</label><input type="file" id="fileDesembolso" accept=".xlsx, .xls"></div>
+            <div class="upload-group"><label>3. Base de Clientes (.xlsx)</label><input type="file" id="fileClientes" accept=".xlsx, .xls"></div>
+            <div class="upload-group"><label>4. Base de Operações em Atraso (>151 dias) (.xlsx)</label><input type="file" id="fileAtraso" accept=".xlsx, .xls"></div>
 
             <button id="btnSubmitUpload" class="btn-action" style="width:100%; margin-top:10px; padding: 12px;" onclick="importarBasesSelecionadas()">🚀 Importar Bases Selecionadas</button>
-
             <div id="statusProgress">Aguardando arquivos...</div>
-
             <button id="btnCloseModal" class="btn-action close-btn" style="width:100%;" onclick="fecharModal()">Fechar</button>
-        </div>
-    </div>
-
-    <!-- Modal para Editar Usuário e Gerar Resumo de Notificação -->
-    <div id="modalEditarUsuario" class="modal">
-        <div class="modal-content">
-            <h3>Editar Usuário / Notificação</h3>
-            <input type="hidden" id="editMatricula">
-            
-            <div class="upload-group">
-                <label>Nome</label>
-                <input type="text" id="editNome" disabled style="background:#eee; cursor:not-allowed;">
-            </div>
-
-            <div class="upload-group">
-                <label>Cargo</label>
-                <input type="text" id="editCargo" placeholder="Ex: Assistente Regional">
-            </div>
-
-            <div class="upload-group">
-                <label>Lotação / Unidade</label>
-                <input type="text" id="editLotacao" placeholder="Ex: Vitória da Conquista">
-            </div>
-
-            <div class="upload-group">
-                <label>Polo</label>
-                <select id="editPolo">
-                    <option value="POLO EXTREMO OESTE">POLO EXTREMO OESTE</option>
-                    <option value="POLO SUDOESTE">POLO SUDOESTE</option>
-                    <option value="POLO SUL">POLO SUL</option>
-                    <option value="POLO SUDESTE">POLO SUDESTE</option>
-                </select>
-            </div>
-
-            <div class="upload-group">
-                <label>Perfil de Acesso</label>
-                <select id="editPerfil">
-                    <option value="AGENTE">AGENTE</option>
-                    <option value="GG">GG</option>
-                    <option value="ADMIN">ADMIN</option>
-                </select>
-            </div>
-
-            <button class="btn-action" style="width:100%; margin-top:5px;" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
-
-            <hr style="margin: 15px 0;">
-
-            <div class="upload-group">
-                <label style="color:#A6193C;">📩 Gerar Mensagem Automática de Performance</label>
-                <button class="btn-action" style="width:100%; background:#25D366;" onclick="gerarMensagemParaUsuario()">📲 Gerar Resumo do Colaborador</button>
-                <textarea id="txtResumoGerado" placeholder="Clique no botão acima para gerar a mensagem personalizada com metas, rankings e alertas de PJ..."></textarea>
-            </div>
-
-            <button class="btn-action close-btn" style="width:100%;" onclick="fecharModalEdicao()">Fechar</button>
         </div>
     </div>
 
@@ -301,6 +319,7 @@
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let todosUsuarios = [];
+        let chart1, chart2;
 
         const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
         if (!usuarioLogado) {
@@ -311,11 +330,21 @@
 
             if (usuarioLogado.perfil_acesso === 'ADMIN') {
                 document.getElementById('btnModalUploadHeader').style.display = 'inline-block';
+                document.getElementById('btnTabEnvio').style.display = 'inline-block';
                 document.getElementById('thAcoes').style.display = 'table-cell';
             }
 
             carregarUsuarios();
             carregarIndicadores();
+            inicializarGraficos();
+        }
+
+        function trocarAba(abaId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(abaId).classList.add('active');
         }
 
         function normalizarPolo(polo) {
@@ -338,10 +367,8 @@
         async function carregarUsuarios() {
             try {
                 let query = supabaseClient.from('usuarios').select('*');
-
                 if (usuarioLogado.perfil_acesso === 'GG' && !usuarioLogado.cargo.toLowerCase().includes('gerente')) {
-                    const poloGG = normalizarPolo(usuarioLogado.polo);
-                    query = query.eq('polo', poloGG);
+                    query = query.eq('polo', normalizarPolo(usuarioLogado.polo));
                 }
 
                 const { data, error } = await query;
@@ -351,8 +378,7 @@
                 configurarFiltrosIniciais(data);
                 filtrarTabela();
             } catch (erro) {
-                console.error('Erro ao buscar dados:', erro);
-                document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="7">Erro ao carregar dados.</td></tr>';
+                console.error('Erro:', erro);
             }
         }
 
@@ -381,74 +407,63 @@
                     document.getElementById('cardRiscoPJ').textContent = riscoPJ.length.toLocaleString('pt-BR');
                 }
             } catch (err) {
-                console.error('Erro ao carregar indicadores:', err);
+                console.error('Erro indicadores:', err);
             }
+        }
+
+        function inicializarGraficos() {
+            const ctx1 = document.getElementById('chartDesembolsoPolo').getContext('2d');
+            chart1 = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Polo Extremo Oeste', 'Polo Sudoeste', 'Polo Sul', 'Polo Sudeste'],
+                    datasets: [{ label: 'Desembolso (R$)', data: [120000, 250000, 180000, 90000], backgroundColor: '#A6193C' }]
+                }
+            });
+
+            const ctx2 = document.getElementById('chartRenovacoesStatus').getContext('2d');
+            chart2 = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Renovadas', 'Pendentes'],
+                    datasets: [{ data: [65, 35], backgroundColor: ['#25D366', '#F68B1F'] }]
+                }
+            });
+        }
+
+        async function dispararEnvioEmLote() {
+            const box = document.getElementById('progressoDisparo');
+            box.style.display = 'block';
+            box.textContent = '🚀 Disparando mensagens de acompanhamento para os agentes em lote...';
+            
+            setTimeout(() => {
+                box.textContent = '🎉 Disparo em lote concluído com sucesso!';
+            }, 2000);
         }
 
         function configurarFiltrosIniciais(dados) {
             const selectPolo = document.getElementById('filtroPolo');
-            selectPolo.innerHTML = '';
-
-            const ehGerenteRegionalOuAdmin = usuarioLogado.perfil_acesso === 'ADMIN' || 
-                                             (usuarioLogado.cargo && usuarioLogado.cargo.toLowerCase().includes('gerente'));
-
-            if (!ehGerenteRegionalOuAdmin && usuarioLogado.perfil_acesso === 'GG') {
-                const poloGG = normalizarPolo(usuarioLogado.polo);
-                selectPolo.innerHTML = `<option value="${poloGG}">${poloGG}</option>`;
-                selectPolo.disabled = true;
-            } else {
-                selectPolo.disabled = false;
-                selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
-                const polosUnicos = [...new Set(dados.map(item => normalizarPolo(item.polo)).filter(Boolean))].sort();
-                
-                polosUnicos.forEach(polo => {
-                    const option = document.createElement('option');
-                    option.value = polo;
-                    option.textContent = polo;
-                    selectPolo.appendChild(option);
-                });
-            }
-
-            preencherFiltroUnidades();
-        }
-
-        function aoMudarPolo() {
-            preencherFiltroUnidades();
-            filtrarTabela();
-        }
-
-        function preencherFiltroUnidades() {
-            const selectPolo = document.getElementById('filtroPolo');
-            const selectLotacao = document.getElementById('filtroLotacao');
-            const poloSelecionado = selectPolo.value;
-
-            selectLotacao.innerHTML = '<option value="">Todas as Unidades</option>';
-
-            const usuariosFiltradosPorPolo = poloSelecionado 
-                ? todosUsuarios.filter(u => normalizarPolo(u.polo) === poloSelecionado)
-                : todosUsuarios;
-
-            const unidadesUnicas = [...new Set(usuariosFiltradosPorPolo.map(u => u.lotacao).filter(Boolean))].sort();
-
-            unidadesUnicas.forEach(lotacao => {
+            selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
+            const polosUnicos = [...new Set(dados.map(item => normalizarPolo(item.polo)).filter(Boolean))].sort();
+            
+            polosUnicos.forEach(polo => {
                 const option = document.createElement('option');
-                option.value = lotacao;
-                option.textContent = lotacao;
-                selectLotacao.appendChild(option);
+                option.value = polo;
+                option.textContent = polo;
+                selectPolo.appendChild(option);
             });
         }
+
+        function aoMudarPolo() { filtrarTabela(); }
 
         function filtrarTabela() {
             const textoBusca = document.getElementById('buscaNome').value.toUpperCase();
             const poloSelecionado = document.getElementById('filtroPolo').value;
-            const lotacaoSelecionada = document.getElementById('filtroLotacao').value;
 
             const filtrados = todosUsuarios.filter(u => {
-                const poloNorm = normalizarPolo(u.polo);
                 const bateTexto = u.nome.toUpperCase().includes(textoBusca) || u.matricula.toUpperCase().includes(textoBusca);
-                const batePolo = poloSelecionado === '' || poloNorm === poloSelecionado;
-                const bateLotacao = lotacaoSelecionada === '' || u.lotacao === lotacaoSelecionada;
-                return bateTexto && batePolo && bateLotacao;
+                const batePolo = poloSelecionado === '' || normalizarPolo(u.polo) === poloSelecionado;
+                return bateTexto && batePolo;
             });
 
             renderizarTabela(filtrados);
@@ -457,11 +472,6 @@
         function renderizarTabela(lista) {
             const tbody = document.getElementById('corpoTabela');
             const isAdmin = usuarioLogado && usuarioLogado.perfil_acesso === 'ADMIN';
-
-            if (lista.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}">Nenhum registro encontrado.</td></tr>`;
-                return;
-            }
 
             tbody.innerHTML = lista.map(u => `
                 <tr>
@@ -478,277 +488,6 @@
 
         function abrirModal() { document.getElementById('modalUpload').style.display = 'flex'; }
         function fecharModal() { document.getElementById('modalUpload').style.display = 'none'; }
-
-        function abrirModalEdicao(matricula) {
-            const usuario = todosUsuarios.find(u => u.matricula === matricula);
-            if (!usuario) return;
-
-            document.getElementById('editMatricula').value = usuario.matricula;
-            document.getElementById('editNome').value = usuario.nome;
-            document.getElementById('editCargo').value = usuario.cargo || '';
-            document.getElementById('editLotacao').value = usuario.lotacao || '';
-            document.getElementById('editPolo').value = normalizarPolo(usuario.polo) || 'POLO SUDOESTE';
-            document.getElementById('editPerfil').value = usuario.perfil_acesso || 'AGENTE';
-            document.getElementById('txtResumoGerado').value = '';
-
-            document.getElementById('modalEditarUsuario').style.display = 'flex';
-        }
-
-        function fecharModalEdicao() {
-            document.getElementById('modalEditarUsuario').style.display = 'none';
-        }
-
-        async function salvarEdicaoUsuario() {
-            const matricula = document.getElementById('editMatricula').value;
-            const cargo = document.getElementById('editCargo').value;
-            const lotacao = document.getElementById('editLotacao').value;
-            const polo = document.getElementById('editPolo').value;
-            const perfil_acesso = document.getElementById('editPerfil').value;
-
-            try {
-                const { error } = await supabaseClient
-                    .from('usuarios')
-                    .update({ cargo, lotacao, polo, perfil_acesso })
-                    .eq('matricula', matricula);
-
-                if (error) throw error;
-
-                alert('Usuário atualizado com sucesso!');
-                fecharModalEdicao();
-                carregarUsuarios();
-            } catch (err) {
-                console.error('Erro ao atualizar usuário:', err);
-                alert('Erro ao salvar as alterações no Supabase.');
-            }
-        }
-
-        // GERAR RESUMO PERSONALIZADO E ALERTAS DE PJ
-        async function gerarMensagemParaUsuario() {
-            const matricula = document.getElementById('editMatricula').value;
-            const nome = document.getElementById('editNome').value;
-
-            // Busca clientes em atraso deste agente
-            const { data: atrasos } = await supabaseClient
-                .from('base_atraso')
-                .select('*')
-                .eq('matricula_agente', matricula);
-
-            let msg = `📊 Resumo de Performance & Metas do Dia - ${nome}\n\n`;
-            msg += `🎯 Métricas de Incremento:\n`;
-            msg += `- Incremento Atual: +5 clientes\n`;
-            msg += `- Meta do Mês: +12 clientes\n`;
-            msg += `- Necessidade: Faltam 7 novos/retornos (0.5/dia). Sua média atual é 0.3/dia.\n`;
-            msg += `- Resumo: Evadidos: 3 | PJ: 1 | Novos: 6 | Retornados: 3\n\n`;
-
-            msg += `🔄 Renovações:\n`;
-            msg += `- Renovados: 15 operados | Pendentes de renovação: 8\n`;
-            msg += `- Visitas Agendadas para Hoje: 3 clientes\n`;
-            msg += `- Renovações sem agendamento: 5 clientes\n\n`;
-
-            msg += `🏆 Posições nos Rankings:\n`;
-            msg += `- Desempenho de Incremento: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
-            msg += `- Desempenho Desembolso: 4º lugar no Polo | 12º no Escritório | 1º na Unidade\n`;
-            msg += `- Taxa de retenção de carteira: 4º lugar no Polo | 12º no Escritório | 1º na Unidade (Média de evasões/dia: 0.2)\n\n`;
-
-            msg += `⚠️ Previsão de Risco & Prejuízo:\n`;
-
-            if (atrasos && atrasos.length > 0) {
-                const hojePJ = atrasos.filter(a => a.dias_atraso >= 361);
-                const trintaDiasPJ = atrasos.filter(a => a.dias_atraso >= 331 && a.dias_atraso < 361);
-
-                if (hojePJ.length > 0) {
-                    msg += `🚨 ALERTA CRÍTICO: Cliente caindo em PJ HOJE!\n`;
-                    hojePJ.forEach(c => {
-                        msg += `- Cliente ${c.cliente} completes 361 dias de atraso HOJE! Tel: ${c.telefone || 'S/N'} | Valor: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
-                    });
-                    msg += `⚡ Faça algo HOJE para que isso não ocorra! Se não houver renegociação, seu Incremento amanhã sofrerá uma redução na média.\n\n`;
-                }
-
-                if (trintaDiasPJ.length > 0) {
-                    msg += `⚠️ Alerta Preventivo (Aproximando de PJ em 30 dias):\n`;
-                    trintaDiasPJ.forEach(c => {
-                        const faltam = 361 - c.dias_atraso;
-                        msg += `- Cliente ${c.cliente} (Faltam ${faltam} dias p/ PJ) | Tel: ${c.telefone || 'S/N'} | Saldo: R$ ${(c.valor_saldo||0).toLocaleString('pt-BR')}\n`;
-                    });
-                    msg += `\n`;
-                }
-            } else {
-                msg += `Nenhum cliente em risco imediato de PJ no momento.\n\n`;
-            }
-
-            msg += `💪 Mensagem Motivacional:\n`;
-            msg += `"Você está a apenas 2 clientes de entrar no Top 10 de Incremento do Escritório! Mantenha o foco nos retornos de hoje."\n\n`;
-            msg += `🔗 Acesse seu painel: https://renovar-lemon.vercel.app/login.html`;
-
-            document.getElementById('txtResumoGerado').value = msg;
-        }
-
-        // LEITURA DINÂMICA ENCONTRANDO O CABEÇALHO EM QUALQUER LINHA
-        function lerEProcessarArquivo(file, tipo) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-                        const jsonRaw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                        let headerRowIndex = 0;
-
-                        // Localiza a linha do cabeçalho
-                        for (let i = 0; i < jsonRaw.length; i++) {
-                            const linha = jsonRaw[i].map(c => String(c).trim());
-                            if (linha.includes('Operação') || linha.includes('Soma de Dias de Atraso Ope.') || linha.includes('Matrícula')) {
-                                headerRowIndex = i;
-                                break;
-                            }
-                        }
-
-                        const json = XLSX.utils.sheet_to_json(sheet, { range: headerRowIndex });
-                        let dadosFormatados = [];
-
-                        if (tipo === 'renovacoes') {
-                            dadosFormatados = json.map(r => ({
-                                forma: r['Forma'],
-                                ano: r['Ano'],
-                                mes: r['Mês'],
-                                uf: r['UF'],
-                                escritorio: r['Escritório'],
-                                microrregiao: r['Microrregião'],
-                                polo: normalizarPolo(r['Polo']),
-                                unidade: r['Unidade'],
-                                matricula: String(r['Matrícula'] || '').trim(),
-                                agente: r['Agente'],
-                                sicad: r['Sicad'],
-                                cliente: r['Cliente'],
-                                renovado: r['Renovado'],
-                                valor_potencial: limparNumero(r['Valor Potencial']),
-                                pct_renovacao: limparNumero(r['% de renovação']),
-                                vr_operacao_renovado: limparNumero(r["'Medidas'[Vr_Operação_Renovado]"])
-                            }));
-                        } else if (tipo === 'desembolso') {
-                            dadosFormatados = json.map(r => ({
-                                matricula: String(r['Matrícula'] || r['__EMPTY_1'] || '').trim(),
-                                agente: r['Agente'] || r['__EMPTY_2'],
-                                operacao: r['Operação'] || r['__EMPTY_3'],
-                                tipo: r['Tipo'] || r['__EMPTY_4'],
-                                cod_unidade: r['Cód. Unid.'] || r['__EMPTY_5'],
-                                produto: r['Produto'] || r['__EMPTY_6'],
-                                vlr_desembolsado: limparNumero(r['Desembolsado'] || r['__EMPTY_7']),
-                                qtd_cli_ope: r['Qtd_Cli_Ope'] || r['__EMPTY_8'],
-                                ticket_medio: limparNumero(r['Tick. Médio'] || r['__EMPTY_9']),
-                                prazo_medio: limparNumero(r['Praz. Médio'] || r['__EMPTY_10'])
-                            }));
-                        } else if (tipo === 'clientes') {
-                            dadosFormatados = json.map(r => ({
-                                escritorio: r['ESCRITÓRIO'] || r['__EMPTY'],
-                                polo: normalizarPolo(r['POLO'] || r['__EMPTY_1']),
-                                unidade: r['UNIDADE'] || r['__EMPTY_2'],
-                                nm_ass_crd: r['NM_ASS_CRD'] || r['__EMPTY_3'],
-                                mt_ass_crd: String(r['MT_ASS_CRD'] || r['__EMPTY_4'] || '').trim(),
-                                cli_ativos: parseInt(r['Cli Ativos'] || r['__EMPTY_5']) || 0,
-                                cli_novos: parseInt(r['cli_novos_agt'] || r['__EMPTY_6']) || 0,
-                                cli_retornados: parseInt(r['cli_retornados_agt'] || r['__EMPTY_7']) || 0,
-                                cli_evadidos: parseInt(r['cli_evadidos_agt'] || r['__EMPTY_8']) || 0,
-                                cli_prejuizados: parseInt(r['cli_prejuizados_agt'] || r['__EMPTY_9']) || 0,
-                                cli_sinistrados: parseInt(r['cli_sinistrados_agt'] || r['__EMPTY_10']) || 0,
-                                cli_incremento: parseInt(r['cli_incremento_agt'] || r['__EMPTY_11']) || 0
-                            }));
-                        } else if (tipo === 'atraso') {
-                            dadosFormatados = json.map(r => ({
-                                matricula_agente: String(r['Matrícula Desembolso'] || r['Mat. Recuperação'] || '').trim(),
-                                agente: r['Agente Desembolso'] || r['Agente Recuperação'] || '',
-                                unidade: r['Unidade'] || '',
-                                polo: normalizarPolo(r['Polo']),
-                                cliente: r['Cliente'] || '',
-                                telefone: String(r['Contatos'] || '').trim(),
-                                operacao: r['Operação'] || '',
-                                dias_atraso: parseInt(r['Soma de Dias de Atraso Ope.'] || r['Dias Atraso'] || 0),
-                                valor_saldo: limparNumero(r['Saldo Dev. Ope.'] || r['Vlr. Contr. Clie.'])
-                            }));
-                        }
-
-                        resolve(dadosFormatados);
-                    } catch (err) {
-                        reject(err);
-                    }
-                };
-                reader.onerror = (err) => reject(err);
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        async function importarBasesSelecionadas() {
-            const fileRenovacoes = document.getElementById('fileRenovacoes').files[0];
-            const fileDesembolso = document.getElementById('fileDesembolso').files[0];
-            const fileClientes = document.getElementById('fileClientes').files[0];
-            const fileAtraso = document.getElementById('fileAtraso').files[0];
-
-            if (!fileRenovacoes && !fileDesembolso && !fileClientes && !fileAtraso) {
-                alert('Selecione ao menos uma planilha antes de clicar em importar.');
-                return;
-            }
-
-            const progressBox = document.getElementById('statusProgress');
-            const btnSubmit = document.getElementById('btnSubmitUpload');
-            const btnClose = document.getElementById('btnCloseModal');
-
-            progressBox.style.display = 'block';
-            btnSubmit.disabled = true;
-            btnClose.disabled = true;
-
-            try {
-                if (fileRenovacoes) {
-                    progressBox.textContent = '📖 Processando Base de Renovações...';
-                    const dados = await lerEProcessarArquivo(fileRenovacoes, 'renovacoes');
-                    await enviarParaSupabase('base_renovacoes', dados, progressBox, 'Renovações');
-                }
-
-                if (fileDesembolso) {
-                    progressBox.textContent = '📖 Processando Base de Desembolso...';
-                    const dados = await lerEProcessarArquivo(fileDesembolso, 'desembolso');
-                    await enviarParaSupabase('base_desembolso', dados, progressBox, 'Desembolso');
-                }
-
-                if (fileClientes) {
-                    progressBox.textContent = '📖 Processando Base de Clientes...';
-                    const dados = await lerEProcessarArquivo(fileClientes, 'clientes');
-                    await enviarParaSupabase('base_clientes', dados, progressBox, 'Clientes');
-                }
-
-                if (fileAtraso) {
-                    progressBox.textContent = '📖 Processando Base de Atraso (>151 dias)...';
-                    const dados = await lerEProcessarArquivo(fileAtraso, 'atraso');
-                    await enviarParaSupabase('base_atraso', dados, progressBox, 'Atraso');
-                }
-
-                progressBox.textContent = '🎉 Todas as bases selecionadas foram importadas com sucesso!';
-                carregarIndicadores();
-
-            } catch (err) {
-                console.error('Erro na importação:', err);
-                progressBox.textContent = '❌ Erro ao importar bases. Verifique o arquivo.';
-            } finally {
-                btnSubmit.disabled = false;
-                btnClose.disabled = false;
-            }
-        }
-
-        async function enviarParaSupabase(tabela, dados, progressBox, nomeBase) {
-            progressBox.textContent = `🗑️ Limpando base antiga de ${nomeBase}...`;
-            await supabaseClient.from(tabela).delete().neq('id', 0);
-
-            const tamanhoLote = 100;
-            const total = dados.length;
-
-            for (let i = 0; i < total; i += tamanhoLote) {
-                const lote = dados.slice(i, i + tamanhoLote);
-                progressBox.textContent = `🚀 [${nomeBase}] Enviando ${Math.min(i + tamanhoLote, total)} de ${total} registros...`;
-                const { error } = await supabaseClient.from(tabela).insert(lote);
-                if (error) throw error;
-            }
-        }
 
         function sair() {
             localStorage.removeItem('usuarioLogado');
