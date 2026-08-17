@@ -315,15 +315,31 @@
         </div>
     </div>
 
-    <!-- ABA 2: AGENDA -->
+    <!-- ABA 2: AGENDA COM FILTROS ESPECÍFICOS -->
     <div id="abaAgenda" class="tab-content">
         <main>
-            <h3>Agenda de Visitas e Interações do Time</h3>
+            <h3>Agenda e Acompanhamento de Visitas do Time</h3>
+            
+            <div class="filter-container">
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <label style="font-size:12px; font-weight:bold;">Início:</label>
+                    <input type="date" id="agendaDataInicio" onchange="filtrarAgenda()">
+                </div>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <label style="font-size:12px; font-weight:bold;">Fim:</label>
+                    <input type="date" id="agendaDataFim" onchange="filtrarAgenda()">
+                </div>
+                <select id="agendaPolo" onchange="aoMudarPoloAgenda()"><option value="">Todos os Polos</option></select>
+                <select id="agendaUnidade" onchange="aoMudarUnidadeAgenda()"><option value="">Todas as Unidades</option></select>
+                <select id="agendaAgente" onchange="filtrarAgenda()"><option value="">Todos os Agentes</option></select>
+            </div>
+
             <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
                             <th>Agente / Matrícula</th>
+                            <th>Unidade / Polo</th>
                             <th>Cliente / Operação</th>
                             <th>Data Atendimento</th>
                             <th>Status / Interação</th>
@@ -332,7 +348,7 @@
                         </tr>
                     </thead>
                     <tbody id="corpoAgenda">
-                        <tr><td colspan="6">Nenhum compromisso encontrado.</td></tr>
+                        <tr><td colspan="7">Carregando dados da agenda...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -462,6 +478,7 @@
         let baseRenovacoes = [];
         let baseAtraso = [];
         let baseMetas = [];
+        let baseAgenda = [];
 
         let chart1, chart2;
 
@@ -506,16 +523,16 @@
             document.getElementById(abaId).classList.add('active');
         }
 
-        // CARREGA TODAS AS BASES DO SUPABASE DE UMA VEZ PARA FILTRAGEM RÁPIDA
         async function carregarBasesERenderizar() {
             try {
-                const [u, d, c, r, a, m] = await Promise.all([
+                const [u, d, c, r, a, m, ag] = await Promise.all([
                     supabaseClient.from('usuarios').select('*'),
                     supabaseClient.from('base_desembolso').select('*'),
                     supabaseClient.from('base_clientes').select('*'),
                     supabaseClient.from('base_renovacoes').select('*'),
                     supabaseClient.from('base_atraso').select('*'),
-                    supabaseClient.from('base_metas_oficial').select('*')
+                    supabaseClient.from('base_metas_oficial').select('*'),
+                    supabaseClient.from('interacoes_agente').select('*')
                 ]);
 
                 todosUsuarios = u.data || [];
@@ -524,9 +541,12 @@
                 baseRenovacoes = r.data || [];
                 baseAtraso = a.data || [];
                 baseMetas = m.data || [];
+                baseAgenda = ag.data || [];
 
                 preencherFiltrosGlobais();
+                preencherFiltrosAgenda();
                 filtrarEDashboardsGerais();
+                filtrarAgenda();
                 filtrarEquipe();
                 preencherListaDisparo();
             } catch (err) {
@@ -564,11 +584,83 @@
             filtrarEDashboardsGerais();
         }
 
-        // CÁLCULO DOS DIAS ÚTEIS RESTANTES ATÉ O DIA 20
+        // PREENCHIMENTO E FILTROS DA AGENDA DO AGENTE
+        function preencherFiltrosAgenda() {
+            const polos = [...new Set(todosUsuarios.map(u => normalizarPolo(u.polo)).filter(Boolean))].sort();
+            const selectPolo = document.getElementById('agendaPolo');
+            selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
+            polos.forEach(p => selectPolo.innerHTML += `<option value="${p}">${p}</option>`);
+
+            aoMudarPoloAgenda();
+        }
+
+        function aoMudarPoloAgenda() {
+            const polo = document.getElementById('agendaPolo').value;
+            const unidades = [...new Set(todosUsuarios.filter(u => !polo || normalizarPolo(u.polo) === polo).map(u => u.lotacao).filter(Boolean))].sort();
+            const selectUnidade = document.getElementById('agendaUnidade');
+            selectUnidade.innerHTML = '<option value="">Todas as Unidades</option>';
+            unidades.forEach(u => selectUnidade.innerHTML += `<option value="${u}">${u}</option>`);
+
+            aoMudarUnidadeAgenda();
+        }
+
+        function aoMudarUnidadeAgenda() {
+            const polo = document.getElementById('agendaPolo').value;
+            const unidade = document.getElementById('agendaUnidade').value;
+            const agentes = todosUsuarios.filter(u => (!polo || normalizarPolo(u.polo) === polo) && (!unidade || u.lotacao === unidade));
+            const selectAgente = document.getElementById('agendaAgente');
+            selectAgente.innerHTML = '<option value="">Todos os Agentes</option>';
+            agentes.forEach(a => selectAgente.innerHTML += `<option value="${a.matricula}">${a.nome}</option>`);
+
+            filtrarAgenda();
+        }
+
+        function filtrarAgenda() {
+            const polo = document.getElementById('agendaPolo').value;
+            const unidade = document.getElementById('agendaUnidade').value;
+            const agenteMatricula = document.getElementById('agendaAgente').value;
+            const dataInicio = document.getElementById('agendaDataInicio').value;
+            const dataFim = document.getElementById('agendaDataFim').value;
+
+            const filtrados = baseAgenda.filter(item => {
+                const uObj = todosUsuarios.find(u => u.matricula === item.matricula_agente);
+                const matchPolo = !polo || (uObj && normalizarPolo(uObj.polo) === polo);
+                const matchUnidade = !unidade || (uObj && uObj.lotacao === unidade);
+                const matchAgente = !agenteMatricula || item.matricula_agente === agenteMatricula;
+                
+                let matchData = true;
+                if (dataInicio && item.data_atendimento) matchData = matchData && (item.data_atendimento >= dataInicio);
+                if (dataFim && item.data_atendimento) matchData = matchData && (item.data_atendimento <= dataFim);
+
+                return matchPolo && matchUnidade && matchAgente && matchData;
+            });
+
+            const tbody = document.getElementById('corpoAgenda');
+            if (filtrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">Nenhum compromisso encontrado para os filtros selecionados.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(i => {
+                const uObj = todosUsuarios.find(u => u.matricula === i.matricula_agente) || {};
+                return `
+                    <tr>
+                        <td><strong>${uObj.nome || i.matricula_agente}</strong> (${i.matricula_agente})</td>
+                        <td>${uObj.lotacao || '-'} / ${normalizarPolo(uObj.polo) || '-'}</td>
+                        <td>${i.cliente || '-'} (${i.ope_renovacao || 'S/N'})</td>
+                        <td>${i.data_atendimento || '-'}</td>
+                        <td>${i.status_interacao || '-'}</td>
+                        <td>${i.data_retorno_agendado || '-'}</td>
+                        <td>R$ ${(i.valor_desejado || 0).toLocaleString('pt-BR')}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         function calcularDiasUteisAte20() {
             const hoje = new Date();
             const diaAtual = hoje.getDate();
-            if (diaAtual > 20) return 1; // Já passou do dia 20
+            if (diaAtual > 20) return 1;
 
             let diasUteis = 0;
             let temp = new Date();
@@ -582,13 +674,12 @@
             return Math.max(diasUteis, 1);
         }
 
-        // LÓGICA DE FILTRAGEM E ATUALIZAÇÃO DOS CARDS / DADS COM OS FILTROS GLOBAIS
         function filtrarEDashboardsGerais() {
             const polo = document.getElementById('globalPolo').value;
             const unidade = document.getElementById('globalUnidade').value;
             const agenteMatricula = document.getElementById('globalAgente').value;
 
-            // 1. Filtrar Desembolso
+            // 1. Desembolso
             const desembolsoFilt = baseDesembolso.filter(d => {
                 const uObj = todosUsuarios.find(u => u.matricula === d.matricula);
                 const matchPolo = !polo || (uObj && normalizarPolo(uObj.polo) === polo);
@@ -599,7 +690,7 @@
 
             const totalDesembolsado = desembolsoFilt.reduce((acc, curr) => acc + limparNumero(curr.vlr_desembolsado), 0);
 
-            // 2. Filtrar Metas
+            // 2. Metas
             const metasFilt = baseMetas.filter(m => {
                 const matchPolo = !polo || normalizarPolo(m.polo) === polo;
                 const matchUnidade = !unidade || String(m.unidade).toUpperCase() === unidade.toUpperCase();
@@ -621,7 +712,7 @@
             document.getElementById('kpiDesembolsoMeta').textContent = `Meta Mês: ${metaDesembolsoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
             document.getElementById('kpiDesembolsoDia').textContent = `Falta p/ Desafio 65%: R$ ${faltaDesafio65.toLocaleString('pt-BR')} (R$ ${realizarPorDia20.toLocaleString('pt-BR')}/dia)`;
 
-            // 3. Filtrar Clientes e Incremento
+            // 3. Clientes e Incremento
             const clientesFilt = baseClientes.filter(c => {
                 const matchPolo = !polo || normalizarPolo(c.polo) === polo;
                 const matchUnidade = !unidade || String(c.unidade).toUpperCase() === unidade.toUpperCase();
@@ -673,7 +764,6 @@
             document.getElementById('kpiRiscoPJValor').textContent = `Saldo em Risco: ${saldoRisco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
             document.getElementById('kpiRiscoPJHoje').textContent = `Caindo HOJE (361 dias): ${caindoHoje.length}`;
 
-            // ATUALIZAR TABELA DE DESEMPENHO POR LOCAL
             renderizarTabelaDesempenhoLocal();
             atualizarGraficosGerais(somaGanho, somaPerda, renovadasConcluidas.length, totalPotencialRenov - renovadasConcluidas.length);
         }
