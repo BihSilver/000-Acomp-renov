@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renovações - Primeiro Acesso</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(45deg, #F68B1F, #f4eeee);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .register-card {
+            background-color: #f4eeee;
+            padding: 40px 30px;
+            border-radius: 20px;
+            color: #A6193C;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .register-card h1 { margin-bottom: 20px; text-align: center; }
+        .form-group {
+            margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label { font-size: 14px; font-weight: bold; }
+        input {
+            padding: 12px 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+            background-color: #fff;
+            outline-color: #F68B1F;
+        }
+        input:focus { border-color: #F68B1F; }
+        .error-msg {
+            color: #d9534f;
+            font-size: 13px;
+            display: none;
+            margin-top: -6px;
+            margin-bottom: 8px;
+        }
+        .register-btn {
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #A6193C;
+            color: #f4eeee;
+            border: none;
+            border-radius: 20px;
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .register-btn:hover { background-color: #F68B1F; }
+        .login-link {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            color: #A6193C;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .login-link:hover { text-decoration: underline; }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+</head>
+<body>
+
+    <main class="register-card">
+        <h1>Primeiro Acesso</h1>
+        <form id="formCadastro">
+            <div class="form-group">
+                <label for="nome">Nome Completo</label>
+                <input type="text" id="nome" placeholder="Digite seu nome conforme no cadastro" required autocomplete="name">
+            </div>
+
+            <div class="form-group">
+                <label for="matricula">Matrícula</label>
+                <input type="text" id="matricula" placeholder="Digite sua matrícula" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" minlength="6" placeholder="Crie uma senha (mínimo 6 caracteres)" required autocomplete="new-password">
+            </div>
+
+            <div class="form-group">
+                <label for="confirmarSenha">Confirmar Senha</label>
+                <input type="password" id="confirmarSenha" placeholder="Repita a senha" required autocomplete="new-password">
+            </div>
+
+            <span id="mensagemErro" class="error-msg">As senhas não coincidem!</span>
+
+            <button type="submit" class="register-btn">Cadastrar Senha</button>
+            <a href="login.html" class="login-link">Já possui senha cadastrada? Faça Login</a>
+        </form>
+    </main>
+
+    <script>
+        const SUPABASE_URL = 'https://ypesnetkhvgoxmmfdult.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZXNuZXRraHZnb3htbWZkdWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjQ3NjgsImV4cCI6MjEwMjUwMDc2OH0.qmCbtCcwAU45uG52KNOWKrNQ5qQHLwdcJ18c27Mns5U';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const form = document.getElementById('formCadastro');
+        const senha = document.getElementById('senha');
+        const confirmarSenha = document.getElementById('confirmarSenha');
+        const mensagemErro = document.getElementById('mensagemErro');
+
+        confirmarSenha.addEventListener('input', () => {
+            mensagemErro.style.display = 'none';
+            confirmarSenha.style.borderColor = '#ccc';
+        });
+
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            if (senha.value !== confirmarSenha.value) {
+                mensagemErro.style.display = 'block';
+                confirmarSenha.style.borderColor = '#d9534f';
+                return;
+            }
+
+            const nome = document.getElementById('nome').value.trim().toUpperCase();
+            const matricula = document.getElementById('matricula').value.trim().toUpperCase();
+
+            try {
+                // Busca usuário pela matrícula
+                const { data: usuarios, error } = await supabaseClient
+                    .from('usuarios')
+                    .select('*')
+                    .eq('matricula', matricula);
+
+                if (error || !usuarios || usuarios.length === 0) {
+                    alert('Matrícula não encontrada no sistema.');
+                    return;
+                }
+
+                const usuario = usuarios[0];
+
+                if (!usuario.nome.toUpperCase().includes(nome)) {
+                    alert('O nome informado não corresponde à matrícula cadastrada.');
+                    return;
+                }
+
+                // Gerar Hash da Senha
+                const salt = dcodeIO.bcrypt.genSaltSync(10);
+                const senhaHash = dcodeIO.bcrypt.hashSync(senha.value, salt);
+
+                // Atualizar no Supabase
+                const { error: updateError } = await supabaseClient
+                    .from('usuarios')
+                    .update({ senha_hash: senhaHash, status_cadastro: 'ativo' })
+                    .eq('matricula', matricula);
+
+                if (updateError) {
+                    alert('Erro ao salvar a senha.');
+                    return;
+                }
+
+                alert('Senha cadastrada com sucesso! Agora você pode fazer o login.');
+                window.location.href = 'login.html';
+
+            } catch (erro) {
+                console.error('Erro no cadastro:', erro);
+                alert('Erro ao processar o cadastro.');
+            }
+        });
+    </script>
+</body>
+</html>

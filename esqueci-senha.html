@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renovações - Esqueci a Senha</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(45deg, #F68B1F, #f4eeee);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .reset-card {
+            background-color: #f4eeee;
+            padding: 40px 30px;
+            border-radius: 20px;
+            color: #A6193C;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .reset-card h1 { margin-bottom: 20px; text-align: center; }
+        .form-group {
+            margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label { font-size: 14px; font-weight: bold; }
+        input {
+            padding: 12px 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+            background-color: #fff;
+            outline-color: #F68B1F;
+        }
+        input:focus { border-color: #F68B1F; }
+        .error-msg {
+            color: #d9534f;
+            font-size: 13px;
+            display: none;
+            margin-top: -6px;
+            margin-bottom: 8px;
+        }
+        .reset-btn {
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #A6193C;
+            color: #f4eeee;
+            border: none;
+            border-radius: 20px;
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .reset-btn:hover { background-color: #F68B1F; }
+        .login-link {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            color: #A6193C;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .login-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <main class="reset-card">
+        <h1>Redefinir Senha</h1>
+        <form id="formEsqueciSenha">
+            <div class="form-group">
+                <label for="matricula">Matrícula</label>
+                <input type="text" id="matricula" name="matricula" placeholder="Digite sua matrícula" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-mail Cadastrado</label>
+                <input type="email" id="email" name="email" placeholder="Digite seu e-mail do sistema" required autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label for="novaSenha">Nova Senha</label>
+                <input type="password" id="novaSenha" name="novaSenha" minlength="6" placeholder="Crie uma nova senha (mínimo 6 caracteres)" required autocomplete="new-password">
+            </div>
+
+            <div class="form-group">
+                <label for="confirmarSenha">Confirmar Nova Senha</label>
+                <input type="password" id="confirmarSenha" name="confirmarSenha" placeholder="Repita a nova senha" required autocomplete="new-password">
+            </div>
+
+            <span id="mensagemErro" class="error-msg">As senhas não coincidem!</span>
+
+            <button type="submit" class="reset-btn">Redefinir Senha</button>
+            <a href="login.html" class="login-link">Lembrou a senha? Voltar ao Login</a>
+        </form>
+    </main>
+
+    <script>
+        const form = document.getElementById('formEsqueciSenha');
+        const novaSenha = document.getElementById('novaSenha');
+        const confirmarSenha = document.getElementById('confirmarSenha');
+        const mensagemErro = document.getElementById('mensagemErro');
+
+        // Oculta mensagem de erro ao digitar
+        confirmarSenha.addEventListener('input', () => {
+            mensagemErro.style.display = 'none';
+            confirmarSenha.style.borderColor = '#ccc';
+        });
+
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            // Validação de correspondência de senhas
+            if (novaSenha.value !== confirmarSenha.value) {
+                mensagemErro.style.display = 'block';
+                confirmarSenha.style.borderColor = '#d9534f';
+                return;
+            }
+
+            const matricula = document.getElementById('matricula').value;
+            const email = document.getElementById('email').value;
+
+            try {
+                const resposta = await fetch('http://localhost:3000/esqueci-senha', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ matricula, email, novaSenha: novaSenha.value })
+                });
+
+                const dados = await resposta.json();
+
+                if (resposta.ok && dados.sucesso) {
+                    alert(dados.mensagem);
+                    window.location.href = 'login.html'; // Redireciona para o login
+                } else {
+                    alert(dados.mensagem || 'Erro ao redefinir a senha.');
+                }
+            } catch (erro) {
+                console.error('Erro de conexão:', erro);
+                alert('Erro ao conectar com o servidor. Verifique se o back-end está ativo.');
+            }
+        });
+    </script>
+
+</body>
+</html>

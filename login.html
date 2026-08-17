@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renovações - Login</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(45deg, #F68B1F, #f4eeee);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-card {
+            background-color: #f4eeee;
+            padding: 40px 30px;
+            border-radius: 20px;
+            color: #A6193C;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .login-card h1 { margin-bottom: 24px; text-align: center; }
+        .form-group {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label { font-size: 14px; font-weight: bold; }
+        input {
+            padding: 12px 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+            background-color: #fff;
+            outline-color: #F68B1F;
+        }
+        input:focus { border-color: #F68B1F; }
+        .login-btn {
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #A6193C;
+            color: #f4eeee;
+            border: none;
+            border-radius: 20px;
+            width: 100%;
+            padding: 14px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .login-btn:hover { background-color: #F68B1F; }
+        .forgot-password, .register-link {
+            display: block;
+            text-align: center;
+            margin-top: 14px;
+            color: #A6193C;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .register-link { font-weight: bold; }
+        .forgot-password:hover, .register-link:hover { text-decoration: underline; }
+    </style>
+
+    <!-- Bibliotecas do Supabase e Bcrypt via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+</head>
+<body>
+
+    <main class="login-card">
+        <h1>Login</h1>
+        <form id="formLogin">
+            <div class="form-group">
+                <label for="matricula">Matrícula</label>
+                <input type="text" id="matricula" placeholder="Digite sua matrícula" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" placeholder="Digite sua senha" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="login-btn">Acessar</button>
+            <a href="esqueci-senha.html" class="forgot-password">Esqueceu a senha?</a>
+            <a href="cadastro.html" class="register-link">Primeiro acesso? Cadastre sua senha</a>
+        </form>
+    </main>
+
+    <script>
+        // Configuração do Supabase
+        const SUPABASE_URL = 'https://ypesnetkhvgoxmmfdult.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZXNuZXRraHZnb3htbWZkdWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjQ3NjgsImV4cCI6MjEwMjUwMDc2OH0.qmCbtCcwAU45uG52KNOWKrNQ5qQHLwdcJ18c27Mns5U';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        document.getElementById('formLogin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const matricula = document.getElementById('matricula').value.trim().toUpperCase();
+            const senha = document.getElementById('senha').value;
+
+            try {
+                // Busca o usuário pela matrícula
+                const { data: usuarios, error } = await supabaseClient
+                    .from('usuarios')
+                    .select('*')
+                    .eq('matricula', matricula);
+
+                if (error || !usuarios || usuarios.length === 0) {
+                    alert('Matrícula ou senha incorretas.');
+                    return;
+                }
+
+                const usuario = usuarios[0];
+
+                if (!usuario.senha_hash) {
+                    alert('Usuário ainda não possui senha cadastrada. Faça o Primeiro Acesso.');
+                    return;
+                }
+
+                // Compara a senha informada com o hash criptografado
+                const senhaValida = dcodeIO.bcrypt.compareSync(senha, usuario.senha_hash);
+
+                if (!senhaValida) {
+                    alert('Matrícula ou senha incorretas.');
+                    return;
+                }
+
+                // Salva a sessão no navegador
+                delete usuario.senha_hash;
+                localStorage.setItem('usuarioLogado', JSON.stringify(usuario));
+
+                alert(`Bem-vindo(a), ${usuario.nome}!`);
+                window.location.href = 'index.html';
+
+            } catch (erro) {
+                console.error('Erro no login:', erro);
+                alert('Erro ao realizar login. Tente novamente.');
+            }
+        });
+    </script>
+</body>
+</html>
