@@ -33,6 +33,7 @@
             font-size: 13px;
         }
         .btn-action:hover { background-color: #d87515; }
+        .btn-action:disabled { background-color: #ccc; cursor: not-allowed; }
 
         .cards-container {
             display: grid;
@@ -102,6 +103,18 @@
         .upload-group label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 5px; }
         .close-btn { background: #6c757d; margin-top: 10px; }
 
+        #statusProgress {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #A6193C;
+            font-weight: bold;
+            text-align: center;
+        }
+
         .table-responsive { width: 100%; overflow-x: auto; margin-top: 15px; }
         table { width: 100%; border-collapse: collapse; min-width: 650px; }
         th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
@@ -145,7 +158,7 @@
             <button id="btnModalUploadMain" class="btn-action" style="display:none;" onclick="abrirModal()">📤 Importar Bases Excel</button>
         </div>
 
-        <!-- Filtros Hierárquicos -->
+        <!-- Filtros -->
         <div class="filter-container">
             <input type="text" id="buscaNome" placeholder="Buscar Nome ou Matrícula..." oninput="filtrarTabela()">
             
@@ -178,11 +191,11 @@
         </div>
     </main>
 
-    <!-- Modal para Importação de Planilhas (ADMIN) -->
+    <!-- Modal para Importação -->
     <div id="modalUpload" class="modal">
         <div class="modal-content">
             <h3>Importar Bases em Excel</h3>
-            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione o arquivo para atualizar o sistema.</p>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Selecione o arquivo correspondente para carregar no sistema.</p>
             
             <div class="upload-group">
                 <label>1. Base de Renovações (.xlsx)</label>
@@ -202,11 +215,13 @@
                 <button class="btn-action" style="margin-top:5px; width:100%;" onclick="uploadBase('clientes')">Enviar Clientes</button>
             </div>
 
+            <div id="statusProgress">Carregando...</div>
+
             <button class="btn-action close-btn" style="width:100%;" onclick="fecharModal()">Fechar</button>
         </div>
     </div>
 
-    <!-- Modal para Editar Usuário (ADMIN) -->
+    <!-- Modal para Editar Usuário -->
     <div id="modalEditarUsuario" class="modal">
         <div class="modal-content">
             <h3>Editar Usuário</h3>
@@ -258,7 +273,6 @@
 
         let todosUsuarios = [];
 
-        // Validar Sessão
         const usuarioLogado = JSON.parse(localStorage.getItem('usuarioLogado'));
         if (!usuarioLogado) {
             window.location.href = 'login.html';
@@ -290,7 +304,6 @@
             try {
                 let query = supabaseClient.from('usuarios').select('*');
 
-                // Se for Coordenador (GG), limita a busca inicial ao Polo dele
                 if (usuarioLogado.perfil_acesso === 'GG' && !usuarioLogado.cargo.toLowerCase().includes('gerente')) {
                     const poloGG = normalizarPolo(usuarioLogado.polo);
                     query = query.eq('polo', poloGG);
@@ -339,12 +352,10 @@
                                              (usuarioLogado.cargo && usuarioLogado.cargo.toLowerCase().includes('gerente'));
 
             if (!ehGerenteRegionalOuAdmin && usuarioLogado.perfil_acesso === 'GG') {
-                // Coordenador: Trava o Polo no dele
                 const poloGG = normalizarPolo(usuarioLogado.polo);
                 selectPolo.innerHTML = `<option value="${poloGG}">${poloGG}</option>`;
                 selectPolo.disabled = true;
             } else {
-                // Gerente Regional / ADMIN: Libera todos os Polos
                 selectPolo.disabled = false;
                 selectPolo.innerHTML = '<option value="">Todos os Polos</option>';
                 const polosUnicos = [...new Set(dados.map(item => normalizarPolo(item.polo)).filter(Boolean))].sort();
@@ -469,6 +480,7 @@
             }
         }
 
+        // FUNÇÃO DE UPLOAD OTIMIZADA POR LOTES (100 linhas por bloco)
         async function uploadBase(tipo) {
             let fileInputId = '';
             let tabelaSupabase = '';
@@ -479,11 +491,15 @@
 
             const fileInput = document.getElementById(fileInputId);
             const file = fileInput.files[0];
+            const progressBox = document.getElementById('statusProgress');
 
             if (!file) {
                 alert('Selecione um arquivo .xlsx antes de clicar em enviar.');
                 return;
             }
+
+            progressBox.style.display = 'block';
+            progressBox.textContent = '📖 Lendo planilha Excel...';
 
             const reader = new FileReader();
             reader.onload = async (e) => {
@@ -545,17 +561,33 @@
                         }));
                     }
 
+                    progressBox.textContent = '🗑️ Limpando base anterior...';
                     await supabaseClient.from(tabelaSupabase).delete().neq('id', 0);
 
-                    const { error } = await supabaseClient.from(tabelaSupabase).insert(dadosFormatados);
-                    if (error) throw error;
+                    // Enviar em Lotes de 100 em 100
+                    const tamanhoLote = 100;
+                    const totalRegistros = dadosFormatados.length;
 
-                    alert(`🎉 ${dadosFormatados.length} registros importados com sucesso!`);
-                    fecharModal();
-                    carregarIndicadores();
+                    for (let i = 0; i < totalRegistros; i += tamanhoLote) {
+                        const lote = dadosFormatados.slice(i, i + tamanhoLote);
+                        progressBox.textContent = `🚀 Enviando dados... ${Math.min(i + tamanhoLote, totalRegistros)} de ${totalRegistros}`;
+
+                        const { error } = await supabaseClient.from(tabelaSupabase).insert(lote);
+                        if (error) throw error;
+                    }
+
+                    progressBox.textContent = '✅ Concluído com Sucesso!';
+                    alert(`🎉 ${totalRegistros} registros importados com sucesso!`);
+                    
+                    setTimeout(() => {
+                        progressBox.style.display = 'none';
+                        fecharModal();
+                        carregarIndicadores();
+                    }, 1000);
 
                 } catch (err) {
                     console.error('Erro ao importar arquivo:', err);
+                    progressBox.style.display = 'none';
                     alert('Erro ao processar o arquivo. Verifique o formato.');
                 }
             };
